@@ -25,13 +25,15 @@ class GameScene(Scene):
 
     def draw(self):
         pyxel.cls(1)
-        pyxel.text(40, 60, "Game Scene - Press Q to Quit", 7)
+        # Image0の左上16x16のキャラクタを画面中央(80,60)に表示
+        pyxel.blt(80, 60, 0, 0, 0, 16, 16, 0)
+        pyxel.text(40, 80, "Game Scene - Press Q to Quit", 7)
 
 class App:
     def __init__(self):
         # 'caption' argument is not supported in some Pyxel versions
         pyxel.init(160, 120)
-        pyxel.caption = "Pyxel Scene Example"
+        pyxel.load("resources.pyxres")
         self.scene = TitleScene()
         pyxel.run(self.update, self.draw)
 
