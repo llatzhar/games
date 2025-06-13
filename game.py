@@ -25,15 +25,33 @@ class TitleScene(Scene):
         pyxel.text(40, 60, "Press SPACE to Start", pyxel.frame_count % 16)
 
 class GameScene(Scene):
+    def __init__(self):
+        self.x = screen_width // 2
+        self.y = screen_height // 2
+
     def update(self):
         if pyxel.btnp(pyxel.KEY_Q):
             return TitleScene()
+        # WASDで移動
+        if pyxel.btn(pyxel.KEY_W):
+            self.y -= 2
+        if pyxel.btn(pyxel.KEY_S):
+            self.y += 2
+        if pyxel.btn(pyxel.KEY_A):
+            self.x -= 2
+        if pyxel.btn(pyxel.KEY_D):
+            self.x += 2
+        # 画面外に出ないよう制限
+        self.x = max(0, min(self.x, screen_width - char_width))
+        self.y = max(0, min(self.y, screen_height - char_height))
         return self
 
     def draw(self):
         pyxel.cls(1)
-        # Image0の左上16x16のキャラクタを画面中央に表示
-        pyxel.blt(screen_width // 2, screen_height // 2, 0, 0, 0, char_width, char_height, 0)
+        # 2パターンのアニメーション: 左上(0,0)と右隣(16,0)を交互に表示
+        anim_frame = (pyxel.frame_count // 10) % 2  # 10フレームごとに切り替え
+        sx = 0 if anim_frame == 0 else char_width
+        pyxel.blt(self.x, self.y, 0, sx, 0, char_width, char_height, 0)
         pyxel.text(40, 80, "Game Scene - Press Q to Quit", 7)
 
 class App:
@@ -47,6 +65,9 @@ class App:
     def update(self):
         next_scene = self.scene.update()
         if next_scene is not self.scene:
+            # GameSceneの初期化
+            if isinstance(next_scene, GameScene):
+                next_scene.__init__()
             self.scene = next_scene
 
     def draw(self):
