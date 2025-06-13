@@ -28,19 +28,27 @@ class GameScene(Scene):
     def __init__(self):
         self.x = screen_width // 2
         self.y = screen_height // 2
+        self.dir = 1  # 1:左向き, -1:右向き
 
     def update(self):
         if pyxel.btnp(pyxel.KEY_Q):
             return TitleScene()
+        moved = False
         # WASDで移動
         if pyxel.btn(pyxel.KEY_W):
             self.y -= 2
+            moved = True
         if pyxel.btn(pyxel.KEY_S):
             self.y += 2
+            moved = True
         if pyxel.btn(pyxel.KEY_A):
             self.x -= 2
+            self.dir = 1  # 左向き
+            moved = True
         if pyxel.btn(pyxel.KEY_D):
             self.x += 2
+            self.dir = -1  # 右向き
+            moved = True
         # 画面外に出ないよう制限
         self.x = max(0, min(self.x, screen_width - char_width))
         self.y = max(0, min(self.y, screen_height - char_height))
@@ -48,10 +56,10 @@ class GameScene(Scene):
 
     def draw(self):
         pyxel.cls(1)
-        # 2パターンのアニメーション: 左上(0,0)と右隣(16,0)を交互に表示
-        anim_frame = (pyxel.frame_count // 10) % 2  # 10フレームごとに切り替え
+        anim_frame = (pyxel.frame_count // 10) % 2
         sx = 0 if anim_frame == 0 else char_width
-        pyxel.blt(self.x, self.y, 0, sx, 0, char_width, char_height, 0)
+        # dir=1:そのまま, dir=-1:左右反転
+        pyxel.blt(self.x, self.y, 0, sx, 0, char_width * self.dir, char_height, 0)
         pyxel.text(40, 80, "Game Scene - Press Q to Quit", 7)
 
 class App:
