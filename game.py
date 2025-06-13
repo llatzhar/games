@@ -1,5 +1,12 @@
 import pyxel
 
+fps = 30  # FPSを30で定義
+pyxres_file = "resources.pyxres"  # pyxresファイル名を変数で定義
+screen_width = 160  # スクリーン幅
+screen_height = 120  # スクリーン高さ
+char_width = 16  # キャラクター幅
+char_height = 16  # キャラクター高さ
+
 class Scene:
     def update(self):
         pass
@@ -25,15 +32,15 @@ class GameScene(Scene):
 
     def draw(self):
         pyxel.cls(1)
-        # Image0の左上16x16のキャラクタを画面中央(80,60)に表示
-        pyxel.blt(80, 60, 0, 0, 0, 16, 16, 0)
+        # Image0の左上16x16のキャラクタを画面中央に表示
+        pyxel.blt(screen_width // 2, screen_height // 2, 0, 0, 0, char_width, char_height, 0)
         pyxel.text(40, 80, "Game Scene - Press Q to Quit", 7)
 
 class App:
     def __init__(self):
         # 'caption' argument is not supported in some Pyxel versions
-        pyxel.init(160, 120)
-        pyxel.load("resources.pyxres")
+        pyxel.init(screen_width, screen_height, fps=fps)  # 変数を適用
+        pyxel.load(pyxres_file)
         self.scene = TitleScene()
         pyxel.run(self.update, self.draw)
 
