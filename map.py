@@ -12,7 +12,7 @@ class MapScene(Scene):
         # プレイヤーの位置（ワールド座標）
         self.player_x = 1.5 * 16  # マップ座標1.5タイル目
         self.player_y = 1.5 * 16  # マップ座標1.5タイル目
-        self.player_size = 12  # プレイヤーのサイズ
+        self.player_size = 16  # プレイヤーのサイズ（16x16ビットマップに合わせて）
         self.player_speed = 2  # プレイヤーの移動速度
         
         # カメラ位置（ビューの左上座標）
@@ -100,28 +100,16 @@ class MapScene(Scene):
         # プレイヤーの移動（WASDキー）
         old_player_x, old_player_y = self.player_x, self.player_y
         
+        # カメラの移動（WASDキー）
         if pyxel.btn(pyxel.KEY_W):
-            new_y = self.player_y - self.player_speed
-            if self.can_move_to(self.player_x, new_y):
-                self.player_y = new_y
+            self.camera_y -= self.camera_speed
         if pyxel.btn(pyxel.KEY_S):
-            new_y = self.player_y + self.player_speed
-            if self.can_move_to(self.player_x, new_y):
-                self.player_y = new_y
+            self.camera_y += self.camera_speed
         if pyxel.btn(pyxel.KEY_A):
-            new_x = self.player_x - self.player_speed
-            if self.can_move_to(new_x, self.player_y):
-                self.player_x = new_x
+            self.camera_x -= self.camera_speed
         if pyxel.btn(pyxel.KEY_D):
-            new_x = self.player_x + self.player_speed
-            if self.can_move_to(new_x, self.player_y):
-                self.player_x = new_x
+            self.camera_x += self.camera_speed
             
-        # カメラをプレイヤーに追従させる
-        # プレイヤーを画面中央に配置
-        self.camera_x = self.player_x - screen_width // 2
-        self.camera_y = self.player_y - screen_height // 2
-        
         # カメラ位置をマップ範囲内に制限
         self.camera_x = max(0, min(self.camera_x, self.map_pixel_width - screen_width))
         self.camera_y = max(0, min(self.camera_y, self.map_pixel_height - screen_height))
@@ -159,29 +147,24 @@ class MapScene(Scene):
         # プレイヤーが画面内にある場合のみ描画
         if (-self.player_size <= player_screen_x <= screen_width + self.player_size and
             -self.player_size <= player_screen_y <= screen_height + self.player_size):
-            # プレイヤーキャラクター（青色の四角形）
+            # プレイヤーキャラクター（resources.pyxresのImage0左上16x16ビットマップ）
             half_size = self.player_size // 2
-            pyxel.rect(
+            pyxel.blt(
                 int(player_screen_x - half_size), 
                 int(player_screen_y - half_size), 
-                self.player_size, 
-                self.player_size, 
-                9  # 青色
-            )
-            # プレイヤーの輪郭
-            pyxel.rectb(
-                int(player_screen_x - half_size), 
-                int(player_screen_y - half_size), 
-                self.player_size, 
-                self.player_size, 
-                1  # 黒色
+                0,  # Image Bank 0
+                0,  # ソース画像のX座標（左上）
+                0,  # ソース画像のY座標（左上）
+                16, # 幅
+                16, # 高さ
+                0   # 透明色（黒を透明にする）
             )
         
         # UI表示
         pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
-        pyxel.text(5, 15, "WASD: Move Player", 7)
+        pyxel.text(5, 15, "WASD: Move Camera", 7)
         
-        # プレイヤー位置を表示
+        # プレイヤー位置を表示（マップ上の実際の座標）
         player_text = f"Player: ({int(self.player_x)}, {int(self.player_y)})"
         pyxel.text(5, 25, player_text, 11)
         
