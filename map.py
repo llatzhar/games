@@ -9,6 +9,12 @@ class MapScene(Scene):
         self.click_y = -1  # クリック位置のY座標
         self.click_timer = 0  # クリック座標表示時間
         
+        # プレイヤーの位置（ワールド座標）
+        self.player_x = 1.5 * 16  # マップ座標1.5タイル目
+        self.player_y = 1.5 * 16  # マップ座標1.5タイル目
+        self.player_size = 12  # プレイヤーのサイズ
+        self.player_speed = 2  # プレイヤーの移動速度
+        
         # カメラ位置（ビューの左上座標）
         self.camera_x = 0
         self.camera_y = 0
@@ -48,6 +54,33 @@ class MapScene(Scene):
             map_data.append(map_row)
         return map_data
         
+    def can_move_to(self, x, y):
+        """指定座標に移動可能かチェック"""
+        # プレイヤーの四隅の座標を計算
+        half_size = self.player_size // 2
+        corners = [
+            (x - half_size, y - half_size),  # 左上
+            (x + half_size, y - half_size),  # 右上
+            (x - half_size, y + half_size),  # 左下
+            (x + half_size, y + half_size)   # 右下
+        ]
+        
+        # 各角がマップ範囲内かつ壁でないかチェック
+        for corner_x, corner_y in corners:
+            # マップ座標に変換
+            map_col = int(corner_x // self.tile_size)
+            map_row = int(corner_y // self.tile_size)
+            
+            # マップ範囲外は移動不可
+            if map_col < 0 or map_col >= self.map_width or map_row < 0 or map_row >= self.map_height:
+                return False
+                
+            # 壁は移動不可
+            if self.map_data[map_row][map_col] == 1:
+                return False
+                
+        return True
+        
     def update(self):
         # Qキーでタイトルシーンに戻る
         if pyxel.btnp(pyxel.KEY_Q):
@@ -64,18 +97,31 @@ class MapScene(Scene):
         if self.click_timer > 0:
             self.click_timer -= 1
             
-        # カメラの移動（WASDキー）
-        old_camera_x, old_camera_y = self.camera_x, self.camera_y
+        # プレイヤーの移動（WASDキー）
+        old_player_x, old_player_y = self.player_x, self.player_y
         
         if pyxel.btn(pyxel.KEY_W):
-            self.camera_y -= self.camera_speed
+            new_y = self.player_y - self.player_speed
+            if self.can_move_to(self.player_x, new_y):
+                self.player_y = new_y
         if pyxel.btn(pyxel.KEY_S):
-            self.camera_y += self.camera_speed
+            new_y = self.player_y + self.player_speed
+            if self.can_move_to(self.player_x, new_y):
+                self.player_y = new_y
         if pyxel.btn(pyxel.KEY_A):
-            self.camera_x -= self.camera_speed
+            new_x = self.player_x - self.player_speed
+            if self.can_move_to(new_x, self.player_y):
+                self.player_x = new_x
         if pyxel.btn(pyxel.KEY_D):
-            self.camera_x += self.camera_speed
+            new_x = self.player_x + self.player_speed
+            if self.can_move_to(new_x, self.player_y):
+                self.player_x = new_x
             
+        # カメラをプレイヤーに追従させる
+        # プレイヤーを画面中央に配置
+        self.camera_x = self.player_x - screen_width // 2
+        self.camera_y = self.player_y - screen_height // 2
+        
         # カメラ位置をマップ範囲内に制限
         self.camera_x = max(0, min(self.camera_x, self.map_pixel_width - screen_width))
         self.camera_y = max(0, min(self.camera_y, self.map_pixel_height - screen_height))
@@ -87,10 +133,10 @@ class MapScene(Scene):
         pyxel.cls(3)  # 背景色
         
         # 画面に表示するタイルの範囲を計算
-        start_col = self.camera_x // self.tile_size
-        end_col = min((self.camera_x + screen_width) // self.tile_size + 1, self.map_width)
-        start_row = self.camera_y // self.tile_size
-        end_row = min((self.camera_y + screen_height) // self.tile_size + 1, self.map_height)
+        start_col = int(self.camera_x // self.tile_size)
+        end_col = min(int((self.camera_x + screen_width) // self.tile_size) + 1, self.map_width)
+        start_row = int(self.camera_y // self.tile_size)
+        end_row = min(int((self.camera_y + screen_height) // self.tile_size) + 1, self.map_height)
         
         # マップを描画（カメラ位置を考慮）
         for row in range(start_row, end_row):
@@ -106,18 +152,47 @@ class MapScene(Scene):
                         # 床（薄い色）
                         pyxel.rect(x, y, self.tile_size, self.tile_size, 6)
         
+        # プレイヤーを描画（カメラ位置を考慮）
+        player_screen_x = self.player_x - self.camera_x
+        player_screen_y = self.player_y - self.camera_y
+        
+        # プレイヤーが画面内にある場合のみ描画
+        if (-self.player_size <= player_screen_x <= screen_width + self.player_size and
+            -self.player_size <= player_screen_y <= screen_height + self.player_size):
+            # プレイヤーキャラクター（青色の四角形）
+            half_size = self.player_size // 2
+            pyxel.rect(
+                int(player_screen_x - half_size), 
+                int(player_screen_y - half_size), 
+                self.player_size, 
+                self.player_size, 
+                9  # 青色
+            )
+            # プレイヤーの輪郭
+            pyxel.rectb(
+                int(player_screen_x - half_size), 
+                int(player_screen_y - half_size), 
+                self.player_size, 
+                self.player_size, 
+                1  # 黒色
+            )
+        
         # UI表示
         pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
-        pyxel.text(5, 15, "WASD: Move Camera View", 7)
+        pyxel.text(5, 15, "WASD: Move Player", 7)
+        
+        # プレイヤー位置を表示
+        player_text = f"Player: ({int(self.player_x)}, {int(self.player_y)})"
+        pyxel.text(5, 25, player_text, 11)
         
         # カメラ位置を表示
-        camera_text = f"Camera: ({self.camera_x}, {self.camera_y})"
-        pyxel.text(5, 25, camera_text, 10)
+        camera_text = f"Camera: ({int(self.camera_x)}, {int(self.camera_y)})"
+        pyxel.text(5, 35, camera_text, 10)
         
         # マウスクリック座標を表示
         if self.click_timer > 0:
             coord_text = f"Click: ({self.click_x}, {self.click_y})"
-            pyxel.text(5, 35, coord_text, 8)
+            pyxel.text(5, 45, coord_text, 8)
             
         # 現在のマウス座標も表示
         mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
