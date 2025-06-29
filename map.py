@@ -8,6 +8,12 @@ class MapScene(Scene):
         self.player_x = screen_width // 2
         self.player_y = screen_height // 2
         self.dir = 1  # 1:左向き, -1:右向き
+        self.click_x = -1  # クリック位置のX座標
+        self.click_y = -1  # クリック位置のY座標
+        self.click_timer = 0  # クリック座標表示時間
+        
+        # マウスカーソルを表示
+        pyxel.mouse(True)
         
         # マップデータ（簡単な例）
         self.map_data = [
@@ -28,6 +34,16 @@ class MapScene(Scene):
         if pyxel.btnp(pyxel.KEY_Q):
             from game import TitleScene
             return TitleScene()
+            
+        # マウスクリック検出
+        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+            self.click_x = pyxel.mouse_x
+            self.click_y = pyxel.mouse_y
+            self.click_timer = 120  # 4秒間表示（30fps * 4秒）
+            
+        # クリック座標表示時間を減らす
+        if self.click_timer > 0:
+            self.click_timer -= 1
             
         # プレイヤーの移動
         old_x, old_y = self.player_x, self.player_y
@@ -96,3 +112,12 @@ class MapScene(Scene):
         
         # UI表示
         pyxel.text(5, 5, "Map Scene - Press Q to Title", 7)
+        
+        # マウスクリック座標を表示
+        if self.click_timer > 0:
+            coord_text = f"Click: ({self.click_x}, {self.click_y})"
+            pyxel.text(5, 15, coord_text, 8)
+            
+        # 現在のマウス座標も表示
+        mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
+        pyxel.text(5, 110, mouse_text, 10)
