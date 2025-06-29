@@ -18,11 +18,15 @@ class TitleScene(Scene):
     def update(self):
         if pyxel.btnp(pyxel.KEY_SPACE):
             return GameScene()
+        if pyxel.btnp(pyxel.KEY_RETURN):
+            from map import MapScene
+            return MapScene()
         return self
 
     def draw(self):
         pyxel.cls(0)
         pyxel.text(40, 60, "Press SPACE to Start", pyxel.frame_count % 16)
+        pyxel.text(35, 80, "Press ENTER for Map", 7)
 
 class GameScene(Scene):
     def __init__(self):
@@ -73,8 +77,8 @@ class App:
     def update(self):
         next_scene = self.scene.update()
         if next_scene is not self.scene:
-            # GameSceneの初期化
-            if isinstance(next_scene, GameScene):
+            # シーンの初期化処理
+            if hasattr(next_scene, '__init__'):
                 next_scene.__init__()
             self.scene = next_scene
 
