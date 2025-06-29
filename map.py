@@ -149,11 +149,16 @@ class MapScene(Scene):
             -self.player_size <= player_screen_y <= screen_height + self.player_size):
             # プレイヤーキャラクター（resources.pyxresのImage0左上16x16ビットマップ）
             half_size = self.player_size // 2
+            
+            # アニメーションフレームを計算（2つのフレームを交互に表示）
+            anim_frame = (pyxel.frame_count // 10) % 2
+            src_x = anim_frame * 16  # 0または16
+            
             pyxel.blt(
                 int(player_screen_x - half_size), 
                 int(player_screen_y - half_size), 
                 0,  # Image Bank 0
-                0,  # ソース画像のX座標（左上）
+                src_x,  # ソース画像のX座標（0または16）
                 0,  # ソース画像のY座標（左上）
                 16, # 幅
                 16, # 高さ
