@@ -17,7 +17,7 @@ class Road:
         self.city2 = city2
 
 class Player:
-    def __init__(self, x, y):
+    def __init__(self, x, y, current_city=None):
         self.x = x
         self.y = y
         self.width = char_width
@@ -25,8 +25,10 @@ class Player:
         self.speed = 2
         self.target_x = None  # 移動目標X座標
         self.target_y = None  # 移動目標Y座標
+        self.target_city = None  # 移動目標City
         self.is_moving = False  # 移動中フラグ
         self.facing_right = True  # 向いている方向（True: 右, False: 左）
+        self.current_city = current_city  # 現在位置のCity参照
 
 class MapScene(Scene):
     def __init__(self):
@@ -64,8 +66,8 @@ class MapScene(Scene):
         
         # プレイヤーリスト（それぞれ異なるCityに配置）
         self.players = [
-            Player(self.cities[0].x, self.cities[0].y),  # プレイヤー1 → Town A
-            Player(self.cities[2].x, self.cities[2].y),  # プレイヤー2 → Town C
+            Player(self.cities[0].x, self.cities[0].y, self.cities[0]),  # プレイヤー1 → Town A
+            Player(self.cities[2].x, self.cities[2].y, self.cities[2]),  # プレイヤー2 → Town C
         ]
         
         # City間の道路を定義
@@ -141,7 +143,7 @@ class MapScene(Scene):
                 return False
                 
         return True
-        
+
     def get_player_at_position(self, screen_x, screen_y):
         """指定したスクリーン座標にいるプレイヤーを取得"""
         # スクリーン座標をワールド座標に変換
@@ -173,12 +175,7 @@ class MapScene(Scene):
         
     def get_player_current_city(self, player):
         """プレイヤーが現在いるCityを取得"""
-        for city in self.cities:
-            # プレイヤーがCity内にいるかチェック（近似判定）
-            distance = ((player.x - city.x) ** 2 + (player.y - city.y) ** 2) ** 0.5
-            if distance <= city.size // 2:
-                return city
-        return None
+        return player.current_city
         
     def is_cities_connected(self, city1, city2):
         """2つのCity間がRoadで接続されているかチェック"""
@@ -257,6 +254,7 @@ class MapScene(Scene):
                     # 接続されているCityにのみ移動可能
                     self.selected_player.target_x = clicked_city.x
                     self.selected_player.target_y = clicked_city.y
+                    self.selected_player.target_city = clicked_city
                     self.selected_player.is_moving = True
                 elif current_city and current_city != clicked_city:
                     # 接続されていないCityへの移動は拒否（何らかの視覚的フィードバックを追加可能）
@@ -286,9 +284,11 @@ class MapScene(Scene):
                     # 目標地点に到達
                     player.x = player.target_x
                     player.y = player.target_y
+                    player.current_city = player.target_city  # 現在位置Cityを更新
                     player.is_moving = False
                     player.target_x = None
                     player.target_y = None
+                    player.target_city = None
                 else:
                     # 目標地点に向かって移動
                     player.x += (dx / distance) * player.speed
@@ -421,7 +421,8 @@ class MapScene(Scene):
         
         # 選択中のプレイヤー情報を表示
         if self.selected_player:
-            selected_text = f"Selected Player: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
+            current_city_name = self.selected_player.current_city.name if self.selected_player.current_city else "None"
+            selected_text = f"Selected Player at {current_city_name}: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
             pyxel.text(5, 35, selected_text, 11)
         else:
             pyxel.text(5, 35, "No player selected", 8)
