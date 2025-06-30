@@ -39,6 +39,11 @@ class Enemy:
         self.speed = 1  # 敵の移動速度（プレイヤーより遅く設定）
         self.current_city = current_city  # 現在位置のCity参照
         self.facing_right = True  # 向いている方向（True: 右, False: 左）
+        # ターンベース移動のための変数を追加
+        self.target_x = None  # 移動目標X座標
+        self.target_y = None  # 移動目標Y座標
+        self.target_city = None  # 移動目標City
+        self.is_moving = False  # 移動中フラグ
 
 class MapScene(Scene):
     def __init__(self):
@@ -47,6 +52,13 @@ class MapScene(Scene):
         self.click_timer = 0  # クリック座標表示時間
         self.selected_player = None  # 選択中のプレイヤー
         self.show_debug_info = True  # デバッグ情報表示フラグ
+        
+        # ターンベースシステム
+        self.current_turn = "player"  # "player" または "enemy"
+        self.turn_counter = 1  # ターン番号
+        self.player_moved_this_turn = False  # このターンでプレイヤーが移動したか
+        self.enemy_moved_this_turn = False  # このターンで敵が移動したか
+        self.selected_enemy = None  # 選択中の敵（エネミーターン用）
         
         # カメラ位置（ビューの左上座標）
         self.camera_x = 0
@@ -240,6 +252,40 @@ class MapScene(Scene):
         return ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and \
                ccw(x1, y1, x2, y2, x3, y3) != ccw(x1, y1, x2, y2, x4, y4)
 
+    def switch_turn(self):
+        """ターンを切り替える"""
+        if self.current_turn == "player":
+            self.current_turn = "enemy"
+            self.player_moved_this_turn = False
+            self.selected_player = None  # プレイヤー選択を解除
+        else:
+            self.current_turn = "player"
+            self.enemy_moved_this_turn = False
+            self.selected_enemy = None  # 敵選択を解除
+            self.turn_counter += 1  # プレイヤーターンの開始で新しいターン番号
+    
+    def can_move_this_turn(self):
+        """このターンで移動可能かチェック"""
+        if self.current_turn == "player":
+            return not self.player_moved_this_turn
+        else:
+            return not self.enemy_moved_this_turn
+    
+    def get_enemy_at_position(self, screen_x, screen_y):
+        """指定したスクリーン座標にいる敵を取得"""
+        # スクリーン座標をワールド座標に変換
+        world_x = screen_x + self.camera_x
+        world_y = screen_y + self.camera_y
+        
+        for enemy in self.enemies:
+            # 敵の範囲内かチェック
+            half_width = enemy.width // 2
+            half_height = enemy.height // 2
+            if (enemy.x - half_width <= world_x <= enemy.x + half_width and
+                enemy.y - half_height <= world_y <= enemy.y + half_height):
+                return enemy
+        return None
+
     def update(self):
         # Qキーでタイトルシーンに戻る
         if pyxel.btnp(pyxel.KEY_Q):
@@ -248,42 +294,78 @@ class MapScene(Scene):
         
         # ESCキーでプレイヤー選択を解除
         if pyxel.btnp(pyxel.KEY_ESCAPE):
-            self.selected_player = None
+            if self.current_turn == "player":
+                self.selected_player = None
+            else:
+                self.selected_enemy = None
             
         # Vキーでデバッグ情報の表示切り替え
         if pyxel.btnp(pyxel.KEY_V):
             self.show_debug_info = not self.show_debug_info
             
+        # Spaceキーでターンスキップ
+        if pyxel.btnp(pyxel.KEY_SPACE):
+            if not any(player.is_moving for player in self.players) and \
+               not any(enemy.is_moving for enemy in self.enemies):
+                self.switch_turn()
+        
         # マウスクリック検出
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             self.click_x = pyxel.mouse_x
             self.click_y = pyxel.mouse_y
             self.click_timer = 120  # 4秒間表示（30fps * 4秒）
             
-            # クリック位置にプレイヤーがいるかチェック
-            clicked_player = self.get_player_at_position(self.click_x, self.click_y)
-            clicked_city = self.get_city_at_position(self.click_x, self.click_y)
-            
-            if clicked_player:
-                # プレイヤーを選択
-                self.selected_player = clicked_player
-            elif clicked_city and self.selected_player:
-                # プレイヤーの現在位置のCityを取得
-                current_city = self.get_player_current_city(self.selected_player)
+            if self.current_turn == "player" and self.can_move_this_turn():
+                # プレイヤーターン：プレイヤーとCityのクリック処理
+                clicked_player = self.get_player_at_position(self.click_x, self.click_y)
+                clicked_city = self.get_city_at_position(self.click_x, self.click_y)
                 
-                if current_city and self.is_cities_connected(current_city, clicked_city):
-                    # 接続されているCityにのみ移動可能
-                    self.selected_player.target_x = clicked_city.x
-                    self.selected_player.target_y = clicked_city.y
-                    self.selected_player.target_city = clicked_city
-                    self.selected_player.is_moving = True
-                elif current_city and current_city != clicked_city:
-                    # 接続されていないCityへの移動は拒否（何らかの視覚的フィードバックを追加可能）
-                    pass
-                elif current_city == clicked_city:
-                    # 同じCityをクリックした場合は移動しない
-                    pass
-            # 任意の場所への移動は削除（Cityのみに移動制限）
+                if clicked_player:
+                    # プレイヤーを選択
+                    self.selected_player = clicked_player
+                elif clicked_city and self.selected_player:
+                    # プレイヤーの現在位置のCityを取得
+                    current_city = self.get_player_current_city(self.selected_player)
+                    
+                    if current_city and self.is_cities_connected(current_city, clicked_city):
+                        # 接続されているCityにのみ移動可能
+                        self.selected_player.target_x = clicked_city.x
+                        self.selected_player.target_y = clicked_city.y
+                        self.selected_player.target_city = clicked_city
+                        self.selected_player.is_moving = True
+                        self.player_moved_this_turn = True
+                    elif current_city and current_city != clicked_city:
+                        # 接続されていないCityへの移動は拒否
+                        pass
+                    elif current_city == clicked_city:
+                        # 同じCityをクリックした場合は移動しない
+                        pass
+            
+            elif self.current_turn == "enemy" and self.can_move_this_turn():
+                # エネミーターン：敵とCityのクリック処理
+                clicked_enemy = self.get_enemy_at_position(self.click_x, self.click_y)
+                clicked_city = self.get_city_at_position(self.click_x, self.click_y)
+                
+                if clicked_enemy:
+                    # 敵を選択
+                    self.selected_enemy = clicked_enemy
+                elif clicked_city and self.selected_enemy:
+                    # 敵の現在位置のCityを取得
+                    current_city = self.selected_enemy.current_city
+                    
+                    if current_city and self.is_cities_connected(current_city, clicked_city):
+                        # 接続されているCityにのみ移動可能
+                        self.selected_enemy.target_x = clicked_city.x
+                        self.selected_enemy.target_y = clicked_city.y
+                        self.selected_enemy.target_city = clicked_city
+                        self.selected_enemy.is_moving = True
+                        self.enemy_moved_this_turn = True
+                    elif current_city and current_city != clicked_city:
+                        # 接続されていないCityへの移動は拒否
+                        pass
+                    elif current_city == clicked_city:
+                        # 同じCityをクリックした場合は移動しない
+                        pass
         
         # クリック座標表示時間を減らす
         if self.click_timer > 0:
@@ -310,10 +392,42 @@ class MapScene(Scene):
                     player.target_x = None
                     player.target_y = None
                     player.target_city = None
+                    # プレイヤーの移動完了時にターン切り替え
+                    if self.current_turn == "player":
+                        self.switch_turn()
                 else:
                     # 目標地点に向かって移動
                     player.x += (dx / distance) * player.speed
                     player.y += (dy / distance) * player.speed
+        
+        # 敵の移動処理
+        for enemy in self.enemies:
+            if enemy.is_moving and enemy.target_x is not None and enemy.target_y is not None:
+                # 目標地点への移動ベクトルを計算
+                dx = enemy.target_x - enemy.x
+                dy = enemy.target_y - enemy.y
+                distance = (dx * dx + dy * dy) ** 0.5
+                
+                # 移動方向に基づいて向きを更新
+                if abs(dx) > 1:  # 横方向の移動が十分大きい場合のみ向きを変更
+                    enemy.facing_right = dx > 0
+                
+                if distance <= enemy.speed:
+                    # 目標地点に到達
+                    enemy.x = enemy.target_x
+                    enemy.y = enemy.target_y
+                    enemy.current_city = enemy.target_city  # 現在位置Cityを更新
+                    enemy.is_moving = False
+                    enemy.target_x = None
+                    enemy.target_y = None
+                    enemy.target_city = None
+                    # 敵の移動完了時にターン切り替え
+                    if self.current_turn == "enemy":
+                        self.switch_turn()
+                else:
+                    # 目標地点に向かって移動
+                    enemy.x += (dx / distance) * enemy.speed
+                    enemy.y += (dy / distance) * enemy.speed
             
         # カメラの移動（WASDキー）
         if pyxel.btn(pyxel.KEY_W):
@@ -466,45 +580,75 @@ class MapScene(Scene):
                     enemy.height, # 高さ
                     0   # 透明色（黒を透明にする）
                 )
-
+                
+                # 選択された敵に点滅する枠線を描画（エネミーターン時）
+                if enemy == self.selected_enemy and self.current_turn == "enemy":
+                    # 点滅効果（30フレームで1回点滅）
+                    if (pyxel.frame_count // 10) % 3 != 0:
+                        frame_color = 8  # 赤色
+                        
+                        # 枠線を描画
+                        frame_x = int(enemy_screen_x - half_width - 1)
+                        frame_y = int(enemy_screen_y - half_height - 1)
+                        frame_w = enemy.width + 2
+                        frame_h = enemy.height + 2
+                        
+                        # 上下の線
+                        pyxel.rect(frame_x, frame_y, frame_w, 1, frame_color)
+                        pyxel.rect(frame_x, frame_y + frame_h - 1, frame_w, 1, frame_color)
+                        # 左右の線
+                        pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
+                        pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
         # UI表示
         if self.show_debug_info:
             pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
             pyxel.text(5, 15, "WASD: Move Camera, ESC: Deselect, V: Debug", 7)
-            pyxel.text(5, 25, "Click: Select player, Click connected City only", 7)
+            pyxel.text(5, 25, "Click: Select character, Click connected City", 7)
             
-            # 選択中のプレイヤー情報を表示
-            if self.selected_player:
+            # ターン情報を表示
+            turn_text = f"Turn {self.turn_counter}: {self.current_turn.upper()} TURN"
+            turn_color = 11 if self.current_turn == "player" else 8
+            pyxel.text(5, 35, turn_text, turn_color)
+            
+            can_move = "YES" if self.can_move_this_turn() else "NO"
+            move_text = f"Can move this turn: {can_move}"
+            pyxel.text(5, 45, move_text, 10)
+            
+            # 選択中のキャラクター情報を表示
+            if self.current_turn == "player" and self.selected_player:
                 current_city_name = self.selected_player.current_city.name if self.selected_player.current_city else "None"
                 selected_text = f"Selected Player at {current_city_name}: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
-                pyxel.text(5, 35, selected_text, 11)
+                pyxel.text(5, 55, selected_text, 11)
+            elif self.current_turn == "enemy" and self.selected_enemy:
+                current_city_name = self.selected_enemy.current_city.name if self.selected_enemy.current_city else "None"
+                selected_text = f"Selected Enemy at {current_city_name}: ({int(self.selected_enemy.x)}, {int(self.selected_enemy.y)})"
+                pyxel.text(5, 55, selected_text, 8)
             else:
-                pyxel.text(5, 35, "No player selected", 8)
+                pyxel.text(5, 55, "No character selected", 8)
             
             # カメラ位置を表示
             camera_text = f"Camera: ({int(self.camera_x)}, {int(self.camera_y)})"
-            pyxel.text(5, 45, camera_text, 10)
-            
+            pyxel.text(5, 65, camera_text, 10)
             # Cities情報を表示
-            pyxel.text(5, 65, "Cities:", 14)
+            pyxel.text(5, 85, "Cities:", 14)
             for i, city in enumerate(self.cities):
                 city_info = f"{city.name}: ({int(city.x)}, {int(city.y)})"
-                pyxel.text(5, 75 + i * 8, city_info, 12)
+                pyxel.text(5, 95 + i * 8, city_info, 12)
             
             # 敵の情報を表示
-            pyxel.text(5, 107, "Enemies:", 14)
+            pyxel.text(5, 127, "Enemies:", 14)
             for i, enemy in enumerate(self.enemies):
                 enemy_city_name = enemy.current_city.name if enemy.current_city else "None"
                 enemy_info = f"Enemy {i+1} at {enemy_city_name}: ({int(enemy.x)}, {int(enemy.y)})"
-                pyxel.text(5, 117 + i * 8, enemy_info, 8)
+                pyxel.text(5, 137 + i * 8, enemy_info, 8)
             # マウスクリック座標を表示
             if self.click_timer > 0:
                 coord_text = f"Click: ({self.click_x}, {self.click_y})"
-                pyxel.text(5, 133, coord_text, 8)
+                pyxel.text(5, 153, coord_text, 8)
                 
             # 現在のマウス座標も表示
             mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
-            pyxel.text(5, 143, mouse_text, 10)
+            pyxel.text(5, 163, mouse_text, 10)
         else:
             # デバッグ情報非表示時は最小限の情報のみ
             pyxel.text(5, 5, "Press V for debug info", 8)
