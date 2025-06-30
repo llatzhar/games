@@ -33,12 +33,6 @@ class MapScene(Scene):
         self.click_x = -1  # クリック位置のX座標
         self.click_y = -1  # クリック位置のY座標
         self.click_timer = 0  # クリック座標表示時間
-        
-        # プレイヤーリスト
-        self.players = [
-            Player(1.5 * char_width, 1.5 * char_height),  # プレイヤー1
-            Player(3.5 * char_width, 2.5 * char_height),  # プレイヤー2
-        ]
         self.selected_player = None  # 選択中のプレイヤー
         
         # カメラ位置（ビューの左上座標）
@@ -66,6 +60,12 @@ class MapScene(Scene):
             City("Town B", 25 * self.tile_size, 5 * self.tile_size),     # 右上
             City("Town C", 5 * self.tile_size, 25 * self.tile_size),     # 左下
             City("Town D", 23 * self.tile_size, 23 * self.tile_size),    # 右下
+        ]
+        
+        # プレイヤーリスト（それぞれ異なるCityに配置）
+        self.players = [
+            Player(self.cities[0].x, self.cities[0].y),  # プレイヤー1 → Town A
+            Player(self.cities[2].x, self.cities[2].y),  # プレイヤー2 → Town C
         ]
         
         # City間の道路を定義
@@ -387,7 +387,8 @@ class MapScene(Scene):
                         # 左右の線
                         pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
                         pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
-          # UI表示
+
+        # UI表示
         pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
         pyxel.text(5, 15, "WASD: Move Camera", 7)
         pyxel.text(5, 25, "Click: Select player, Click City: Move to City", 7)
