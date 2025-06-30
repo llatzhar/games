@@ -208,12 +208,17 @@ class MapScene(Scene):
         
         return ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and \
                ccw(x1, y1, x2, y2, x3, y3) != ccw(x1, y1, x2, y2, x4, y4)
-        
+
     def update(self):
         # Qキーでタイトルシーンに戻る
         if pyxel.btnp(pyxel.KEY_Q):
             from game import TitleScene
             return TitleScene()
+        
+        # ESCキーでプレイヤー選択を解除
+        if pyxel.btnp(pyxel.KEY_ESCAPE):
+            self.selected_player = None
+            
         # マウスクリック検出
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             self.click_x = pyxel.mouse_x
@@ -390,7 +395,7 @@ class MapScene(Scene):
 
         # UI表示
         pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
-        pyxel.text(5, 15, "WASD: Move Camera", 7)
+        pyxel.text(5, 15, "WASD: Move Camera, ESC: Deselect player", 7)
         pyxel.text(5, 25, "Click: Select player, Click City: Move to City", 7)
         
         # 選択中のプレイヤー情報を表示

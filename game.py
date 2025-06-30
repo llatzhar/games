@@ -69,7 +69,8 @@ class GameScene(Scene):
 class App:
     def __init__(self):
         # 'caption' argument is not supported in some Pyxel versions
-        pyxel.init(screen_width, screen_height, fps=fps)  # 変数を適用
+        # quit_key=pyxel.KEY_NONE でESCキーでの終了を無効化
+        pyxel.init(screen_width, screen_height, fps=fps, quit_key=pyxel.KEY_NONE)  # 変数を適用
         pyxel.load(pyxres_file)
         self.scene = TitleScene()
         pyxel.run(self.update, self.draw)
