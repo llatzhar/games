@@ -12,7 +12,8 @@ class MapScene(Scene):
         # プレイヤーの位置（ワールド座標）
         self.player_x = 1.5 * 16  # マップ座標1.5タイル目
         self.player_y = 1.5 * 16  # マップ座標1.5タイル目
-        self.player_size = 16  # プレイヤーのサイズ（16x16ビットマップに合わせて）
+        self.player_width = char_width  # プレイヤーの幅
+        self.player_height = char_height  # プレイヤーの高さ
         self.player_speed = 2  # プレイヤーの移動速度
         
         # カメラ位置（ビューの左上座標）
@@ -56,13 +57,13 @@ class MapScene(Scene):
         
     def can_move_to(self, x, y):
         """指定座標に移動可能かチェック"""
-        # プレイヤーの四隅の座標を計算
-        half_size = self.player_size // 2
+        half_width = self.player_width // 2
+        half_height = self.player_height // 2
         corners = [
-            (x - half_size, y - half_size),  # 左上
-            (x + half_size, y - half_size),  # 右上
-            (x - half_size, y + half_size),  # 左下
-            (x + half_size, y + half_size)   # 右下
+            (x - half_width, y - half_height),  # 左上
+            (x + half_width, y - half_height),  # 右上
+            (x - half_width, y + half_height),  # 左下
+            (x + half_width, y + half_height)   # 右下
         ]
         
         # 各角がマップ範囲内かつ壁でないかチェック
@@ -145,23 +146,24 @@ class MapScene(Scene):
         player_screen_y = self.player_y - self.camera_y
         
         # プレイヤーが画面内にある場合のみ描画
-        if (-self.player_size <= player_screen_x <= screen_width + self.player_size and
-            -self.player_size <= player_screen_y <= screen_height + self.player_size):
+        if (-self.player_width <= player_screen_x <= screen_width + self.player_width and
+            -self.player_height <= player_screen_y <= screen_height + self.player_height):
             # プレイヤーキャラクター（resources.pyxresのImage0左上16x16ビットマップ）
-            half_size = self.player_size // 2
+            half_width = self.player_width // 2
+            half_height = self.player_height // 2
             
             # アニメーションフレームを計算（2つのフレームを交互に表示）
             anim_frame = (pyxel.frame_count // 10) % 2
             src_x = anim_frame * 16  # 0または16
             
             pyxel.blt(
-                int(player_screen_x - half_size), 
-                int(player_screen_y - half_size), 
+                int(player_screen_x - half_width), 
+                int(player_screen_y - half_height), 
                 0,  # Image Bank 0
                 src_x,  # ソース画像のX座標（0または16）
                 0,  # ソース画像のY座標（左上）
-                16, # 幅
-                16, # 高さ
+                self.player_width, # 幅
+                self.player_height, # 高さ
                 0   # 透明色（黒を透明にする）
             )
         
