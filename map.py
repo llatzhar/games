@@ -13,6 +13,7 @@ class Player:
         self.target_x = None  # 移動目標X座標
         self.target_y = None  # 移動目標Y座標
         self.is_moving = False  # 移動中フラグ
+        self.facing_right = True  # 向いている方向（True: 右, False: 左）
 
 class MapScene(Scene):
     def __init__(self):
@@ -142,6 +143,10 @@ class MapScene(Scene):
                 dy = player.target_y - player.y
                 distance = (dx * dx + dy * dy) ** 0.5
                 
+                # 移動方向に基づいて向きを更新
+                if abs(dx) > 1:  # 横方向の移動が十分大きい場合のみ向きを変更
+                    player.facing_right = dx > 0
+                
                 if distance <= player.speed:
                     # 目標地点に到達
                     player.x = player.target_x
@@ -211,13 +216,16 @@ class MapScene(Scene):
                 anim_frame = (pyxel.frame_count // 10) % 2
                 src_x = anim_frame * 16  # 0または16
                 
+                # 向いている方向に応じて描画幅を調整（右向きの場合は負の値で反転）
+                draw_width = player.width if not player.facing_right else -player.width
+                
                 pyxel.blt(
                     int(player_screen_x - half_width), 
                     int(player_screen_y - half_height), 
                     0,  # Image Bank 0
                     src_x,  # ソース画像のX座標（0または16）
                     0,  # ソース画像のY座標（左上）
-                    player.width, # 幅
+                    draw_width, # 幅（負の値で左右反転）
                     player.height, # 高さ
                     0   # 透明色（黒を透明にする）
                 )
