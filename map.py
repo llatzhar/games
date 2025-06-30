@@ -56,10 +56,10 @@ class MapScene(Scene):
         
         # Cityを定義（4つの街）
         self.cities = [
-            City("Town A", 3 * self.tile_size, 3 * self.tile_size),      # 左上
-            City("Town B", 25 * self.tile_size, 5 * self.tile_size),     # 右上
-            City("Town C", 5 * self.tile_size, 25 * self.tile_size),     # 左下
-            City("Town D", 23 * self.tile_size, 23 * self.tile_size),    # 右下
+            City("Town A", 2 * self.tile_size, 2 * self.tile_size),      # 左上 (32, 32)
+            City("Town B", 7 * self.tile_size, 2 * self.tile_size),      # 右上 (112, 32)
+            City("Town C", 2 * self.tile_size, 6 * self.tile_size),      # 左下 (32, 96)
+            City("Town D", 7 * self.tile_size, 6 * self.tile_size),      # 右下 (112, 96)
         ]
         
         # プレイヤーリスト（それぞれ異なるCityに配置）
