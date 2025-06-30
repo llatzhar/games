@@ -171,6 +171,23 @@ class MapScene(Scene):
                 return city
         return None
         
+    def get_player_current_city(self, player):
+        """プレイヤーが現在いるCityを取得"""
+        for city in self.cities:
+            # プレイヤーがCity内にいるかチェック（近似判定）
+            distance = ((player.x - city.x) ** 2 + (player.y - city.y) ** 2) ** 0.5
+            if distance <= city.size // 2:
+                return city
+        return None
+        
+    def is_cities_connected(self, city1, city2):
+        """2つのCity間がRoadで接続されているかチェック"""
+        for road in self.roads:
+            if (road.city1 == city1 and road.city2 == city2) or \
+               (road.city1 == city2 and road.city2 == city1):
+                return True
+        return False
+    
     def line_intersects_screen(self, x1, y1, x2, y2):
         """線分が画面と交差するかチェック"""
         # 画面の境界
@@ -233,17 +250,21 @@ class MapScene(Scene):
                 # プレイヤーを選択
                 self.selected_player = clicked_player
             elif clicked_city and self.selected_player:
-                # 選択中のプレイヤーをCityに移動
-                self.selected_player.target_x = clicked_city.x
-                self.selected_player.target_y = clicked_city.y
-                self.selected_player.is_moving = True
-            elif self.selected_player:
-                # 選択中のプレイヤーを移動目標に設定
-                world_x = self.click_x + self.camera_x
-                world_y = self.click_y + self.camera_y
-                self.selected_player.target_x = world_x
-                self.selected_player.target_y = world_y
-                self.selected_player.is_moving = True
+                # プレイヤーの現在位置のCityを取得
+                current_city = self.get_player_current_city(self.selected_player)
+                
+                if current_city and self.is_cities_connected(current_city, clicked_city):
+                    # 接続されているCityにのみ移動可能
+                    self.selected_player.target_x = clicked_city.x
+                    self.selected_player.target_y = clicked_city.y
+                    self.selected_player.is_moving = True
+                elif current_city and current_city != clicked_city:
+                    # 接続されていないCityへの移動は拒否（何らかの視覚的フィードバックを追加可能）
+                    pass
+                elif current_city == clicked_city:
+                    # 同じCityをクリックした場合は移動しない
+                    pass
+            # 任意の場所への移動は削除（Cityのみに移動制限）
         
         # クリック座標表示時間を減らす
         if self.click_timer > 0:
@@ -396,7 +417,7 @@ class MapScene(Scene):
         # UI表示
         pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
         pyxel.text(5, 15, "WASD: Move Camera, ESC: Deselect player", 7)
-        pyxel.text(5, 25, "Click: Select player, Click City: Move to City", 7)
+        pyxel.text(5, 25, "Click: Select player, Click connected City only", 7)
         
         # 選択中のプレイヤー情報を表示
         if self.selected_player:
