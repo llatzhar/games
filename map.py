@@ -30,6 +30,16 @@ class Player:
         self.facing_right = True  # 向いている方向（True: 右, False: 左）
         self.current_city = current_city  # 現在位置のCity参照
 
+class Enemy:
+    def __init__(self, x, y, current_city=None):
+        self.x = x
+        self.y = y
+        self.width = char_width
+        self.height = char_height
+        self.speed = 1  # 敵の移動速度（プレイヤーより遅く設定）
+        self.current_city = current_city  # 現在位置のCity参照
+        self.facing_right = True  # 向いている方向（True: 右, False: 左）
+
 class MapScene(Scene):
     def __init__(self):
         self.click_x = -1  # クリック位置のX座標
@@ -69,6 +79,12 @@ class MapScene(Scene):
         self.players = [
             Player(self.cities[0].x, self.cities[0].y, self.cities[0]),  # プレイヤー1 → Town A
             Player(self.cities[2].x, self.cities[2].y, self.cities[2]),  # プレイヤー2 → Town C
+        ]
+        
+        # 敵キャラクターリスト（City上に配置）
+        self.enemies = [
+            Enemy(self.cities[1].x, self.cities[1].y, self.cities[1]),  # 敵1 → Town B
+            Enemy(self.cities[3].x, self.cities[3].y, self.cities[3]),  # 敵2 → Town D
         ]
         
         # City間の道路を定義
@@ -419,6 +435,38 @@ class MapScene(Scene):
                         pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
                         pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
 
+        # 敵キャラクターを描画（カメラ位置を考慮）
+        for i, enemy in enumerate(self.enemies):
+            enemy_screen_x = enemy.x - self.camera_x
+            enemy_screen_y = enemy.y - self.camera_y
+            
+            # 敵が画面内にある場合のみ描画
+            if (-enemy.width <= enemy_screen_x <= screen_width + enemy.width and
+                -enemy.height <= enemy_screen_y <= screen_height + enemy.height):
+                
+                # 敵キャラクター（resources.pyxresのImage0縦2段目16x16ビットマップ）
+                half_width = enemy.width // 2
+                half_height = enemy.height // 2
+                
+                # アニメーションフレームを計算（2つのフレームを交互に表示）
+                anim_frame = (pyxel.frame_count // 10) % 2
+                src_x = anim_frame * 16  # 0または16
+                src_y = 16  # 縦2段目
+                
+                # 向いている方向に応じて描画幅を調整（右向きの場合は負の値で反転）
+                draw_width = enemy.width if not enemy.facing_right else -enemy.width
+                
+                pyxel.blt(
+                    int(enemy_screen_x - half_width), 
+                    int(enemy_screen_y - half_height), 
+                    0,  # Image Bank 0
+                    src_x,  # ソース画像のX座標（0または16）
+                    src_y,  # ソース画像のY座標（縦2段目）
+                    draw_width, # 幅（負の値で左右反転）
+                    enemy.height, # 高さ
+                    0   # 透明色（黒を透明にする）
+                )
+
         # UI表示
         if self.show_debug_info:
             pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
@@ -443,14 +491,20 @@ class MapScene(Scene):
                 city_info = f"{city.name}: ({int(city.x)}, {int(city.y)})"
                 pyxel.text(5, 75 + i * 8, city_info, 12)
             
+            # 敵の情報を表示
+            pyxel.text(5, 107, "Enemies:", 14)
+            for i, enemy in enumerate(self.enemies):
+                enemy_city_name = enemy.current_city.name if enemy.current_city else "None"
+                enemy_info = f"Enemy {i+1} at {enemy_city_name}: ({int(enemy.x)}, {int(enemy.y)})"
+                pyxel.text(5, 117 + i * 8, enemy_info, 8)
             # マウスクリック座標を表示
             if self.click_timer > 0:
                 coord_text = f"Click: ({self.click_x}, {self.click_y})"
-                pyxel.text(5, 115, coord_text, 8)
+                pyxel.text(5, 133, coord_text, 8)
                 
             # 現在のマウス座標も表示
             mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
-            pyxel.text(5, 125, mouse_text, 10)
+            pyxel.text(5, 143, mouse_text, 10)
         else:
             # デバッグ情報非表示時は最小限の情報のみ
             pyxel.text(5, 5, "Press V for debug info", 8)
