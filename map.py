@@ -3,18 +3,29 @@ import pyxel
 # game.pyから定数をインポート
 from game import screen_width, screen_height, char_width, char_height, Scene
 
+class Player:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.width = char_width
+        self.height = char_height
+        self.speed = 2
+        self.target_x = None  # 移動目標X座標
+        self.target_y = None  # 移動目標Y座標
+        self.is_moving = False  # 移動中フラグ
+
 class MapScene(Scene):
     def __init__(self):
         self.click_x = -1  # クリック位置のX座標
         self.click_y = -1  # クリック位置のY座標
         self.click_timer = 0  # クリック座標表示時間
         
-        # プレイヤーの位置（ワールド座標）
-        self.player_x = 1.5 * 16  # マップ座標1.5タイル目
-        self.player_y = 1.5 * 16  # マップ座標1.5タイル目
-        self.player_width = char_width  # プレイヤーの幅
-        self.player_height = char_height  # プレイヤーの高さ
-        self.player_speed = 2  # プレイヤーの移動速度
+        # プレイヤーリスト
+        self.players = [
+            Player(1.5 * char_width, 1.5 * char_height),  # プレイヤー1
+            Player(3.5 * char_width, 2.5 * char_height),  # プレイヤー2
+        ]
+        self.selected_player = None  # 選択中のプレイヤー
         
         # カメラ位置（ビューの左上座標）
         self.camera_x = 0
@@ -57,8 +68,8 @@ class MapScene(Scene):
         
     def can_move_to(self, x, y):
         """指定座標に移動可能かチェック"""
-        half_width = self.player_width // 2
-        half_height = self.player_height // 2
+        half_width = char_width // 2
+        half_height = char_height // 2
         corners = [
             (x - half_width, y - half_height),  # 左上
             (x + half_width, y - half_height),  # 右上
@@ -82,25 +93,67 @@ class MapScene(Scene):
                 
         return True
         
+    def get_player_at_position(self, screen_x, screen_y):
+        """指定したスクリーン座標にいるプレイヤーを取得"""
+        # スクリーン座標をワールド座標に変換
+        world_x = screen_x + self.camera_x
+        world_y = screen_y + self.camera_y
+        
+        for player in self.players:
+            # プレイヤーの範囲内かチェック
+            half_width = player.width // 2
+            half_height = player.height // 2
+            if (player.x - half_width <= world_x <= player.x + half_width and
+                player.y - half_height <= world_y <= player.y + half_height):
+                return player
+        return None
+        
     def update(self):
         # Qキーでタイトルシーンに戻る
         if pyxel.btnp(pyxel.KEY_Q):
             from game import TitleScene
             return TitleScene()
-            
         # マウスクリック検出
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             self.click_x = pyxel.mouse_x
             self.click_y = pyxel.mouse_y
             self.click_timer = 120  # 4秒間表示（30fps * 4秒）
             
-        # クリック座標表示時間を減らす
+            # クリック位置にプレイヤーがいるかチェック
+            clicked_player = self.get_player_at_position(self.click_x, self.click_y)
+            if clicked_player:
+                # プレイヤーを選択
+                self.selected_player = clicked_player
+            elif self.selected_player:
+                # 選択中のプレイヤーを移動目標に設定
+                world_x = self.click_x + self.camera_x
+                world_y = self.click_y + self.camera_y
+                self.selected_player.target_x = world_x
+                self.selected_player.target_y = world_y
+                self.selected_player.is_moving = True        # クリック座標表示時間を減らす
         if self.click_timer > 0:
             self.click_timer -= 1
             
-        # プレイヤーの移動（WASDキー）
-        old_player_x, old_player_y = self.player_x, self.player_y
-        
+        # プレイヤーの移動処理
+        for player in self.players:
+            if player.is_moving and player.target_x is not None and player.target_y is not None:
+                # 目標地点への移動ベクトルを計算
+                dx = player.target_x - player.x
+                dy = player.target_y - player.y
+                distance = (dx * dx + dy * dy) ** 0.5
+                
+                if distance <= player.speed:
+                    # 目標地点に到達
+                    player.x = player.target_x
+                    player.y = player.target_y
+                    player.is_moving = False
+                    player.target_x = None
+                    player.target_y = None
+                else:
+                    # 目標地点に向かって移動
+                    player.x += (dx / distance) * player.speed
+                    player.y += (dy / distance) * player.speed
+            
         # カメラの移動（WASDキー）
         if pyxel.btn(pyxel.KEY_W):
             self.camera_y -= self.camera_speed
@@ -142,47 +195,72 @@ class MapScene(Scene):
                         pyxel.rect(x, y, self.tile_size, self.tile_size, 6)
         
         # プレイヤーを描画（カメラ位置を考慮）
-        player_screen_x = self.player_x - self.camera_x
-        player_screen_y = self.player_y - self.camera_y
-        
-        # プレイヤーが画面内にある場合のみ描画
-        if (-self.player_width <= player_screen_x <= screen_width + self.player_width and
-            -self.player_height <= player_screen_y <= screen_height + self.player_height):
-            # プレイヤーキャラクター（resources.pyxresのImage0左上16x16ビットマップ）
-            half_width = self.player_width // 2
-            half_height = self.player_height // 2
+        for i, player in enumerate(self.players):
+            player_screen_x = player.x - self.camera_x
+            player_screen_y = player.y - self.camera_y
             
-            # アニメーションフレームを計算（2つのフレームを交互に表示）
-            anim_frame = (pyxel.frame_count // 10) % 2
-            src_x = anim_frame * 16  # 0または16
-            
-            pyxel.blt(
-                int(player_screen_x - half_width), 
-                int(player_screen_y - half_height), 
-                0,  # Image Bank 0
-                src_x,  # ソース画像のX座標（0または16）
-                0,  # ソース画像のY座標（左上）
-                self.player_width, # 幅
-                self.player_height, # 高さ
-                0   # 透明色（黒を透明にする）
-            )
+            # プレイヤーが画面内にある場合のみ描画
+            if (-player.width <= player_screen_x <= screen_width + player.width and
+                -player.height <= player_screen_y <= screen_height + player.height):
+                
+                # プレイヤーキャラクター（resources.pyxresのImage0左上16x16ビットマップ）
+                half_width = player.width // 2
+                half_height = player.height // 2
+                
+                # アニメーションフレームを計算（2つのフレームを交互に表示）
+                anim_frame = (pyxel.frame_count // 10) % 2
+                src_x = anim_frame * 16  # 0または16
+                
+                pyxel.blt(
+                    int(player_screen_x - half_width), 
+                    int(player_screen_y - half_height), 
+                    0,  # Image Bank 0
+                    src_x,  # ソース画像のX座標（0または16）
+                    0,  # ソース画像のY座標（左上）
+                    player.width, # 幅
+                    player.height, # 高さ
+                    0   # 透明色（黒を透明にする）
+                )
+                
+                # 選択されたプレイヤーに点滅する枠線を描画
+                if player == self.selected_player:
+                    # 点滅効果（30フレームで1回点滅）
+                    if (pyxel.frame_count // 10) % 3 != 0:                        # 枠線の色（明るい色で目立つように）
+                        frame_color = 11  # ライトブルー
+                        
+                        # 枠線を描画
+                        frame_x = int(player_screen_x - half_width - 1)
+                        frame_y = int(player_screen_y - half_height - 1)
+                        frame_w = player.width + 2
+                        frame_h = player.height + 2
+                        
+                        # 上下の線
+                        pyxel.rect(frame_x, frame_y, frame_w, 1, frame_color)
+                        pyxel.rect(frame_x, frame_y + frame_h - 1, frame_w, 1, frame_color)
+                        # 左右の線
+                        pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
+                        pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
         
         # UI表示
         pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
         pyxel.text(5, 15, "WASD: Move Camera", 7)
+        pyxel.text(5, 25, "Click: Select player, Click again: Move", 7)
         
-        # プレイヤー位置を表示（マップ上の実際の座標）
-        player_text = f"Player: ({int(self.player_x)}, {int(self.player_y)})"
-        pyxel.text(5, 25, player_text, 11)
+        # 選択中のプレイヤー情報を表示
+        if self.selected_player:
+            selected_text = f"Selected Player: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
+            pyxel.text(5, 35, selected_text, 11)
+        else:
+            pyxel.text(5, 35, "No player selected", 8)
         
         # カメラ位置を表示
         camera_text = f"Camera: ({int(self.camera_x)}, {int(self.camera_y)})"
-        pyxel.text(5, 35, camera_text, 10)
+        pyxel.text(5, 45, camera_text, 10)
         
         # マウスクリック座標を表示
         if self.click_timer > 0:
             coord_text = f"Click: ({self.click_x}, {self.click_y})"
-            pyxel.text(5, 45, coord_text, 8)
+            pyxel.text(5, 55, coord_text, 8)
             
         # 現在のマウス座標も表示
         mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
