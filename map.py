@@ -36,6 +36,7 @@ class MapScene(Scene):
         self.click_y = -1  # クリック位置のY座標
         self.click_timer = 0  # クリック座標表示時間
         self.selected_player = None  # 選択中のプレイヤー
+        self.show_debug_info = True  # デバッグ情報表示フラグ
         
         # カメラ位置（ビューの左上座標）
         self.camera_x = 0
@@ -233,6 +234,10 @@ class MapScene(Scene):
         if pyxel.btnp(pyxel.KEY_ESCAPE):
             self.selected_player = None
             
+        # Vキーでデバッグ情報の表示切り替え
+        if pyxel.btnp(pyxel.KEY_V):
+            self.show_debug_info = not self.show_debug_info
+            
         # マウスクリック検出
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             self.click_x = pyxel.mouse_x
@@ -415,33 +420,37 @@ class MapScene(Scene):
                         pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
 
         # UI表示
-        pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
-        pyxel.text(5, 15, "WASD: Move Camera, ESC: Deselect player", 7)
-        pyxel.text(5, 25, "Click: Select player, Click connected City only", 7)
-        
-        # 選択中のプレイヤー情報を表示
-        if self.selected_player:
-            current_city_name = self.selected_player.current_city.name if self.selected_player.current_city else "None"
-            selected_text = f"Selected Player at {current_city_name}: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
-            pyxel.text(5, 35, selected_text, 11)
-        else:
-            pyxel.text(5, 35, "No player selected", 8)
-        
-        # カメラ位置を表示
-        camera_text = f"Camera: ({int(self.camera_x)}, {int(self.camera_y)})"
-        pyxel.text(5, 45, camera_text, 10)
-        
-        # Cities情報を表示
-        pyxel.text(5, 65, "Cities:", 14)
-        for i, city in enumerate(self.cities):
-            city_info = f"{city.name}: ({int(city.x)}, {int(city.y)})"
-            pyxel.text(5, 75 + i * 8, city_info, 12)
-        
-        # マウスクリック座標を表示
-        if self.click_timer > 0:
-            coord_text = f"Click: ({self.click_x}, {self.click_y})"
-            pyxel.text(5, 115, coord_text, 8)
+        if self.show_debug_info:
+            pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
+            pyxel.text(5, 15, "WASD: Move Camera, ESC: Deselect, V: Debug", 7)
+            pyxel.text(5, 25, "Click: Select player, Click connected City only", 7)
             
-        # 現在のマウス座標も表示
-        mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
-        pyxel.text(5, 125, mouse_text, 10)
+            # 選択中のプレイヤー情報を表示
+            if self.selected_player:
+                current_city_name = self.selected_player.current_city.name if self.selected_player.current_city else "None"
+                selected_text = f"Selected Player at {current_city_name}: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
+                pyxel.text(5, 35, selected_text, 11)
+            else:
+                pyxel.text(5, 35, "No player selected", 8)
+            
+            # カメラ位置を表示
+            camera_text = f"Camera: ({int(self.camera_x)}, {int(self.camera_y)})"
+            pyxel.text(5, 45, camera_text, 10)
+            
+            # Cities情報を表示
+            pyxel.text(5, 65, "Cities:", 14)
+            for i, city in enumerate(self.cities):
+                city_info = f"{city.name}: ({int(city.x)}, {int(city.y)})"
+                pyxel.text(5, 75 + i * 8, city_info, 12)
+            
+            # マウスクリック座標を表示
+            if self.click_timer > 0:
+                coord_text = f"Click: ({self.click_x}, {self.click_y})"
+                pyxel.text(5, 115, coord_text, 8)
+                
+            # 現在のマウス座標も表示
+            mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
+            pyxel.text(5, 125, mouse_text, 10)
+        else:
+            # デバッグ情報非表示時は最小限の情報のみ
+            pyxel.text(5, 5, "Press V for debug info", 8)
