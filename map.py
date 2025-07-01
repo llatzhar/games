@@ -69,6 +69,14 @@ class MapScene(Scene):
         self.camera_y = 0
         self.camera_speed = 4  # カメラの移動速度
         
+        # カメラ追従システム
+        self.camera_follow_target = None  # 追従対象のキャラクター
+        self.camera_target_x = 0  # カメラの目標X座標
+        self.camera_target_y = 0  # カメラの目標Y座標
+        self.camera_follow_speed = 6  # 追従時のカメラ移動速度
+        self.camera_offset_x = screen_width // 2  # カメラの中央オフセット
+        self.camera_offset_y = screen_height // 2  # カメラの中央オフセット
+        
         # マウスカーソルを表示
         pyxel.mouse(True)
         
@@ -143,6 +151,44 @@ class MapScene(Scene):
                     map_row.append(0)
             map_data.append(map_row)
         return map_data
+
+    def set_camera_follow_target(self, target):
+        """カメラ追従対象を設定"""
+        self.camera_follow_target = target
+        if target:
+            # 目標位置を即座に設定
+            self.camera_target_x = target.x - self.camera_offset_x
+            self.camera_target_y = target.y - self.camera_offset_y
+    
+    def update_camera_follow(self):
+        """カメラ追従の更新処理"""
+        if self.camera_follow_target:
+            # 追従対象の現在位置を目標位置として設定
+            target_camera_x = self.camera_follow_target.x - self.camera_offset_x
+            target_camera_y = self.camera_follow_target.y - self.camera_offset_y
+            
+            # マップ範囲内に制限
+            target_camera_x = max(0, min(target_camera_x, self.map_pixel_width - screen_width))
+            target_camera_y = max(0, min(target_camera_y, self.map_pixel_height - screen_height))
+            
+            # スムーズにカメラを移動
+            dx = target_camera_x - self.camera_x
+            dy = target_camera_y - self.camera_y
+            distance = (dx * dx + dy * dy) ** 0.5
+            
+            if distance > 1:  # 目標位置に十分近い場合は移動停止
+                # 追従速度で移動
+                move_distance = min(self.camera_follow_speed, distance)
+                self.camera_x += (dx / distance) * move_distance
+                self.camera_y += (dy / distance) * move_distance
+            else:
+                # 目標位置に到達
+                self.camera_x = target_camera_x
+                self.camera_y = target_camera_y
+    
+    def clear_camera_follow(self):
+        """カメラ追従をクリア"""
+        self.camera_follow_target = None
 
     def get_connected_cities(self, city):
         """指定したCityに接続されているCityのリストを取得"""
@@ -280,6 +326,9 @@ class MapScene(Scene):
         # ランダムに敵を選択
         selected_enemy = random.choice(available_enemies)
         self.current_ai_enemy = selected_enemy  # 現在AI処理中の敵を記録
+        
+        # 敵を選択時にカメラ追従を設定
+        self.set_camera_follow_target(selected_enemy)
         
         # AIに基づいて移動先を決定
         target_city = self.decide_enemy_action(selected_enemy)
@@ -423,6 +472,8 @@ class MapScene(Scene):
             self.player_moved_this_turn = False
             self.selected_player = None  # プレイヤー選択を解除
             self.ai_timer = 0  # AIタイマーをリセット
+            # プレイヤーターンからエネミーターンに切り替わる際はカメラ追従をクリア
+            self.clear_camera_follow()
         else:
             self.current_turn = "player"
             self.cutin_text = "PLAYER TURN"
@@ -430,6 +481,8 @@ class MapScene(Scene):
             self.selected_enemy = None  # 敵選択を解除
             self.turn_counter += 1  # プレイヤーターンの開始で新しいターン番号
             self.ai_timer = 0  # AIタイマーをリセット
+            # エネミーターンからプレイヤーターンに切り替わる際はカメラ追従をクリア
+            self.clear_camera_follow()
     
     def can_move_this_turn(self):
         """このターンで移動可能かチェック"""
@@ -557,6 +610,8 @@ class MapScene(Scene):
                 if clicked_enemy:
                     # 敵を選択
                     self.selected_enemy = clicked_enemy
+                    # 敵を選択時にカメラ追従を設定
+                    self.set_camera_follow_target(clicked_enemy)
                 elif clicked_city and self.selected_enemy:
                     # 敵の現在位置のCityを取得
                     current_city = self.selected_enemy.current_city
@@ -637,15 +692,23 @@ class MapScene(Scene):
                     enemy.x += (dx / distance) * enemy.speed
                     enemy.y += (dy / distance) * enemy.speed
             
-        # カメラの移動（WASDキー）
-        if pyxel.btn(pyxel.KEY_W):
-            self.camera_y -= self.camera_speed
-        if pyxel.btn(pyxel.KEY_S):
-            self.camera_y += self.camera_speed
-        if pyxel.btn(pyxel.KEY_A):
-            self.camera_x -= self.camera_speed
-        if pyxel.btn(pyxel.KEY_D):
-            self.camera_x += self.camera_speed
+        # カメラ追従の更新処理
+        self.update_camera_follow()
+        
+        # カメラの手動移動（WASDキー）- 敵ターン中で追従対象がある場合は無効
+        if not (self.current_turn == "enemy" and self.camera_follow_target):
+            if pyxel.btn(pyxel.KEY_W):
+                self.camera_y -= self.camera_speed
+                self.clear_camera_follow()  # 手動操作時は追従をクリア
+            if pyxel.btn(pyxel.KEY_S):
+                self.camera_y += self.camera_speed
+                self.clear_camera_follow()  # 手動操作時は追従をクリア
+            if pyxel.btn(pyxel.KEY_A):
+                self.camera_x -= self.camera_speed
+                self.clear_camera_follow()  # 手動操作時は追従をクリア
+            if pyxel.btn(pyxel.KEY_D):
+                self.camera_x += self.camera_speed
+                self.clear_camera_follow()  # 手動操作時は追従をクリア
             
         # カメラ位置をマップ範囲内に制限
         self.camera_x = max(0, min(self.camera_x, self.map_pixel_width - screen_width))
@@ -868,7 +931,10 @@ class MapScene(Scene):
         # UI表示
         if self.show_debug_info:
             pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
-            pyxel.text(5, 15, "WASD: Move Camera, ESC: Deselect, V: Debug", 7)
+            if self.current_turn == "enemy" and self.camera_follow_target:
+                pyxel.text(5, 15, "Camera following enemy - Manual control disabled", 6)
+            else:
+                pyxel.text(5, 15, "WASD: Move Camera, ESC: Deselect, V: Debug", 7)
             pyxel.text(5, 25, "Click: Select character, Click connected City", 7)
             
             # ターン情報を表示
@@ -895,44 +961,49 @@ class MapScene(Scene):
             # カメラ位置を表示
             camera_text = f"Camera: ({int(self.camera_x)}, {int(self.camera_y)})"
             pyxel.text(5, 65, camera_text, 10)
+            
+            # カメラ追従情報を表示
+            if self.camera_follow_target:
+                follow_info = f"Camera following: {self.camera_follow_target.ai_type if hasattr(self.camera_follow_target, 'ai_type') else 'Player'}"
+                pyxel.text(5, 75, follow_info, 13)
+            else:
+                pyxel.text(5, 75, "Camera: Manual control", 6)
             # Cities情報を表示
-            pyxel.text(5, 85, "Cities:", 14)
+            pyxel.text(5, 90, "Cities:", 14)
             for i, city in enumerate(self.cities):
                 city_info = f"{city.name}: ({int(city.x)}, {int(city.y)})"
-                pyxel.text(5, 95 + i * 8, city_info, 12)
+                pyxel.text(5, 100 + i * 8, city_info, 12)
             
             # 敵の情報を表示
-            pyxel.text(5, 127, "Enemies:", 14)
+            pyxel.text(5, 132, "Enemies:", 14)
             for i, enemy in enumerate(self.enemies):
                 enemy_city_name = enemy.current_city.name if enemy.current_city else "None"
                 enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {enemy_city_name}: ({int(enemy.x)}, {int(enemy.y)})"
-                pyxel.text(5, 137 + i * 8, enemy_info, 8)
-            
-            # AI凡例を表示
-            pyxel.text(5, 155, "AI Legend:", 14)
-            pyxel.circ(15, 163, 2, 8)   # 赤色
-            pyxel.text(20, 161, "Aggressive", 7)
-            pyxel.circ(80, 163, 2, 11)  # ライトブルー  
-            pyxel.text(85, 161, "Patrol", 7)
-            pyxel.circ(15, 171, 2, 3)   # 緑色
-            pyxel.text(20, 169, "Defensive", 7)
-            pyxel.circ(80, 171, 2, 14)  # ピンク
-            pyxel.text(85, 169, "Random", 7)
+                pyxel.text(5, 142 + i * 8, enemy_info, 8)
+              # AI凡例を表示
+            pyxel.text(5, 160, "AI Legend:", 14)
+            pyxel.circ(15, 168, 2, 8)   # 赤色
+            pyxel.text(20, 166, "Aggressive", 7)
+            pyxel.circ(80, 168, 2, 11)  # ライトブルー  
+            pyxel.text(85, 166, "Patrol", 7)
+            pyxel.circ(15, 176, 2, 3)   # 緑色
+            pyxel.text(20, 174, "Defensive", 7)
+            pyxel.circ(80, 176, 2, 14)  # ピンク
+            pyxel.text(85, 174, "Random", 7)
             
             # AI情報を表示（エネミーターン時）
             if self.current_turn == "enemy":
                 ai_info = f"AI Timer: {self.ai_timer}/{self.ai_decision_delay}"
-                pyxel.text(5, 181, ai_info, 8)
-            
+                pyxel.text(5, 186, ai_info, 8)
             # マウスクリック座標を表示
             if self.click_timer > 0:
                 coord_text = f"Click: ({self.click_x}, {self.click_y})"
-                y_pos = 191 if self.current_turn == "enemy" else 181
+                y_pos = 196 if self.current_turn == "enemy" else 186
                 pyxel.text(5, y_pos, coord_text, 8)
                 
             # 現在のマウス座標も表示
             mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
-            y_pos = 201 if self.current_turn == "enemy" else 191
+            y_pos = 206 if self.current_turn == "enemy" else 196
             pyxel.text(5, y_pos, mouse_text, 10)
         else:
             # デバッグ情報非表示時は最小限の情報のみ
