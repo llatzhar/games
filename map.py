@@ -172,13 +172,8 @@ class MapScene(Scene):
                 
         return True
 
-    def get_player_at_position(self, screen_x, screen_y):
-        """指定したスクリーン座標にいるプレイヤーを取得"""
-        # スクリーン座標をワールド座標に変換
-        world_x = screen_x + self.camera_x
-        world_y = screen_y + self.camera_y
-        
-        # 各Cityにいるキャラクターを収集
+    def get_character_positions_by_city(self):
+        """各Cityにいるキャラクターを収集して辞書で返す"""
         character_positions = {}
         for city in self.cities:
             character_positions[city] = []
@@ -188,6 +183,16 @@ class MapScene(Scene):
             for enemy in self.enemies:
                 if enemy.current_city == city:
                     character_positions[city].append(('enemy', enemy))
+        return character_positions
+
+    def get_player_at_position(self, screen_x, screen_y):
+        """指定したスクリーン座標にいるプレイヤーを取得"""
+        # スクリーン座標をワールド座標に変換
+        world_x = screen_x + self.camera_x
+        world_y = screen_y + self.camera_y
+        
+        # 各Cityにいるキャラクターを収集
+        character_positions = self.get_character_positions_by_city()
         
         for player in self.players:
             # キャラクターの描画位置を計算（重なり防止と同じロジック）
@@ -306,15 +311,7 @@ class MapScene(Scene):
         world_y = screen_y + self.camera_y
         
         # 各Cityにいるキャラクターを収集
-        character_positions = {}
-        for city in self.cities:
-            character_positions[city] = []
-            for player in self.players:
-                if player.current_city == city:
-                    character_positions[city].append(('player', player))
-            for enemy in self.enemies:
-                if enemy.current_city == city:
-                    character_positions[city].append(('enemy', enemy))
+        character_positions = self.get_character_positions_by_city()
         
         for enemy in self.enemies:
             # キャラクターの描画位置を計算（重なり防止と同じロジック）
@@ -557,22 +554,8 @@ class MapScene(Scene):
                 pyxel.text(text_x, text_y, city.name, 7)  # 白文字
 
         # キャラクターの描画位置を計算（重なりを防ぐ）
-        character_positions = {}  # City毎にキャラクターのリストを管理
+        character_positions = self.get_character_positions_by_city()  # City毎にキャラクターのリストを管理
 
-        # 各Cityにいるキャラクターを収集
-        for city in self.cities:
-            character_positions[city] = []
-            
-            # そのCityにいるプレイヤーを追加
-            for player in self.players:
-                if player.current_city == city:
-                    character_positions[city].append(('player', player))
-            
-            # そのCityにいる敵を追加
-            for enemy in self.enemies:
-                if enemy.current_city == city:
-                    character_positions[city].append(('enemy', enemy))
-        
         # プレイヤーを描画（カメラ位置を考慮、重なり防止）
         for i, player in enumerate(self.players):
             # キャラクターの描画位置を計算
