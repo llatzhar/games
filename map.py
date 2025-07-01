@@ -86,16 +86,15 @@ class MapScene(Scene):
             City("Town C", 2 * self.tile_size, 6 * self.tile_size),      # 左下 (32, 96)
             City("Town D", 7 * self.tile_size, 6 * self.tile_size),      # 右下 (112, 96)
         ]
-        
-        # プレイヤーリスト（それぞれ異なるCityに配置）
+        # プレイヤーリスト（複数を同じCityに配置してテスト）
         self.players = [
             Player(self.cities[0].x, self.cities[0].y, self.cities[0]),  # プレイヤー1 → Town A
-            Player(self.cities[2].x, self.cities[2].y, self.cities[2]),  # プレイヤー2 → Town C
+            Player(self.cities[0].x, self.cities[0].y, self.cities[0]),  # プレイヤー2 → Town A（重なりテスト）
         ]
         
-        # 敵キャラクターリスト（City上に配置）
+        # 敵キャラクターリスト（Town Aに配置して重なりをテスト）
         self.enemies = [
-            Enemy(self.cities[1].x, self.cities[1].y, self.cities[1]),  # 敵1 → Town B
+            Enemy(self.cities[0].x, self.cities[0].y, self.cities[0]),  # 敵1 → Town A（重なりテスト）
             Enemy(self.cities[3].x, self.cities[3].y, self.cities[3]),  # 敵2 → Town D
         ]
         
@@ -179,11 +178,40 @@ class MapScene(Scene):
         world_x = screen_x + self.camera_x
         world_y = screen_y + self.camera_y
         
+        # 各Cityにいるキャラクターを収集
+        character_positions = {}
+        for city in self.cities:
+            character_positions[city] = []
+            for player in self.players:
+                if player.current_city == city:
+                    character_positions[city].append(('player', player))
+            for enemy in self.enemies:
+                if enemy.current_city == city:
+                    character_positions[city].append(('enemy', enemy))
+        
         for player in self.players:
+            # キャラクターの描画位置を計算（重なり防止と同じロジック）
+            if player.current_city and not player.is_moving:
+                # 移動中でない場合のみオフセットを適用
+                city_characters = character_positions[player.current_city]
+                char_index = next((idx for idx, (char_type, char) in enumerate(city_characters) 
+                                 if char_type == 'player' and char == player), 0)
+                
+                offset_x = 0
+                if len(city_characters) > 1:
+                    total_width = len(city_characters) * player.width
+                    start_x = -(total_width - player.width) // 2
+                    offset_x = start_x + char_index * player.width
+                
+                adjusted_x = player.x + offset_x
+            else:
+                # 移動中または現在のCityがない場合はオフセットなし
+                adjusted_x = player.x
+            
             # プレイヤーの範囲内かチェック
             half_width = player.width // 2
             half_height = player.height // 2
-            if (player.x - half_width <= world_x <= player.x + half_width and
+            if (adjusted_x - half_width <= world_x <= adjusted_x + half_width and
                 player.y - half_height <= world_y <= player.y + half_height):
                 return player
         return None
@@ -277,11 +305,40 @@ class MapScene(Scene):
         world_x = screen_x + self.camera_x
         world_y = screen_y + self.camera_y
         
+        # 各Cityにいるキャラクターを収集
+        character_positions = {}
+        for city in self.cities:
+            character_positions[city] = []
+            for player in self.players:
+                if player.current_city == city:
+                    character_positions[city].append(('player', player))
+            for enemy in self.enemies:
+                if enemy.current_city == city:
+                    character_positions[city].append(('enemy', enemy))
+        
         for enemy in self.enemies:
+            # キャラクターの描画位置を計算（重なり防止と同じロジック）
+            if enemy.current_city and not enemy.is_moving:
+                # 移動中でない場合のみオフセットを適用
+                city_characters = character_positions[enemy.current_city]
+                char_index = next((idx for idx, (char_type, char) in enumerate(city_characters) 
+                                 if char_type == 'enemy' and char == enemy), 0)
+                
+                offset_x = 0
+                if len(city_characters) > 1:
+                    total_width = len(city_characters) * enemy.width
+                    start_x = -(total_width - enemy.width) // 2
+                    offset_x = start_x + char_index * enemy.width
+                
+                adjusted_x = enemy.x + offset_x
+            else:
+                # 移動中または現在のCityがない場合はオフセットなし
+                adjusted_x = enemy.x
+            
             # 敵の範囲内かチェック
             half_width = enemy.width // 2
             half_height = enemy.height // 2
-            if (enemy.x - half_width <= world_x <= enemy.x + half_width and
+            if (adjusted_x - half_width <= world_x <= adjusted_x + half_width and
                 enemy.y - half_height <= world_y <= enemy.y + half_height):
                 return enemy
         return None
@@ -499,9 +556,44 @@ class MapScene(Scene):
                 text_y = city_screen_y + half_size + 2
                 pyxel.text(text_x, text_y, city.name, 7)  # 白文字
 
-        # プレイヤーを描画（カメラ位置を考慮）
+        # キャラクターの描画位置を計算（重なりを防ぐ）
+        character_positions = {}  # City毎にキャラクターのリストを管理
+
+        # 各Cityにいるキャラクターを収集
+        for city in self.cities:
+            character_positions[city] = []
+            
+            # そのCityにいるプレイヤーを追加
+            for player in self.players:
+                if player.current_city == city:
+                    character_positions[city].append(('player', player))
+            
+            # そのCityにいる敵を追加
+            for enemy in self.enemies:
+                if enemy.current_city == city:
+                    character_positions[city].append(('enemy', enemy))
+        
+        # プレイヤーを描画（カメラ位置を考慮、重なり防止）
         for i, player in enumerate(self.players):
-            player_screen_x = player.x - self.camera_x
+            # キャラクターの描画位置を計算
+            if player.current_city and not player.is_moving:
+                # 移動中でない場合のみ同じCity内での位置調整を行う
+                city_characters = character_positions[player.current_city]
+                char_index = next((idx for idx, (char_type, char) in enumerate(city_characters) 
+                                 if char_type == 'player' and char == player), 0)
+                
+                # 複数キャラクターがいる場合は横に並べる
+                offset_x = 0
+                if len(city_characters) > 1:
+                    total_width = len(city_characters) * player.width
+                    start_x = -(total_width - player.width) // 2
+                    offset_x = start_x + char_index * player.width
+                
+                player_screen_x = player.x + offset_x - self.camera_x
+            else:
+                # 移動中または現在のCityがない場合はオフセットなし
+                player_screen_x = player.x - self.camera_x
+                
             player_screen_y = player.y - self.camera_y
             
             # プレイヤーが画面内にある場合のみ描画
@@ -549,9 +641,27 @@ class MapScene(Scene):
                         pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
                         pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
 
-        # 敵キャラクターを描画（カメラ位置を考慮）
+        # 敵キャラクターを描画（カメラ位置を考慮、重なり防止）
         for i, enemy in enumerate(self.enemies):
-            enemy_screen_x = enemy.x - self.camera_x
+            # キャラクターの描画位置を計算
+            if enemy.current_city and not enemy.is_moving:
+                # 移動中でない場合のみ同じCity内での位置調整を行う
+                city_characters = character_positions[enemy.current_city]
+                char_index = next((idx for idx, (char_type, char) in enumerate(city_characters) 
+                                 if char_type == 'enemy' and char == enemy), 0)
+                
+                # 複数キャラクターがいる場合は横に並べる
+                offset_x = 0
+                if len(city_characters) > 1:
+                    total_width = len(city_characters) * enemy.width
+                    start_x = -(total_width - enemy.width) // 2
+                    offset_x = start_x + char_index * enemy.width
+                
+                enemy_screen_x = enemy.x + offset_x - self.camera_x
+            else:
+                # 移動中または現在のCityがない場合はオフセットなし
+                enemy_screen_x = enemy.x - self.camera_x
+                
             enemy_screen_y = enemy.y - self.camera_y
             
             # 敵が画面内にある場合のみ描画
