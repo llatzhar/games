@@ -58,6 +58,12 @@ class MapScene(Scene):
         self.enemy_moved_this_turn = False  # このターンで敵が移動したか
         self.selected_enemy = None  # 選択中の敵（エネミーターン用）
         
+        # カットイン演出用変数
+        self.is_showing_cutin = False  # カットイン演出中フラグ
+        self.cutin_timer = 0  # カットイン演出タイマー
+        self.cutin_duration = 60  # カットイン演出時間（2秒 = 60フレーム）
+        self.cutin_text = ""  # カットインで表示するテキスト
+        
         # カメラ位置（ビューの左上座標）
         self.camera_x = 0
         self.camera_y = 0
@@ -407,13 +413,19 @@ class MapScene(Scene):
 
     def switch_turn(self):
         """ターンを切り替える"""
+        # カットイン演出を開始
+        self.is_showing_cutin = True
+        self.cutin_timer = 0
+        
         if self.current_turn == "player":
             self.current_turn = "enemy"
+            self.cutin_text = "ENEMY TURN"
             self.player_moved_this_turn = False
             self.selected_player = None  # プレイヤー選択を解除
             self.ai_timer = 0  # AIタイマーをリセット
         else:
             self.current_turn = "player"
+            self.cutin_text = "PLAYER TURN"
             self.enemy_moved_this_turn = False
             self.selected_enemy = None  # 敵選択を解除
             self.turn_counter += 1  # プレイヤーターンの開始で新しいターン番号
@@ -463,6 +475,15 @@ class MapScene(Scene):
         return None
 
     def update(self):
+        # カットイン演出の処理
+        if self.is_showing_cutin:
+            self.cutin_timer += 1
+            if self.cutin_timer >= self.cutin_duration:
+                self.is_showing_cutin = False
+                self.cutin_timer = 0
+            # カットイン演出中は他の操作を受け付けない
+            return self
+        
         # Qキーでタイトルシーンに戻る
         if pyxel.btnp(pyxel.KEY_Q):
             from game import TitleScene
@@ -916,3 +937,47 @@ class MapScene(Scene):
         else:
             # デバッグ情報非表示時は最小限の情報のみ
             pyxel.text(5, 5, "Press V for debug info", 8)
+        
+        # カットイン演出の描画
+        if self.is_showing_cutin:
+            self.draw_cutin_animation()
+    
+    def draw_cutin_animation(self):
+        """カットイン演出を描画"""
+        # 背景を暗くする
+        pyxel.rect(0, 0, screen_width, screen_height, 0)
+        
+        # アニメーション進行度を計算（0.0から1.0）
+        progress = self.cutin_timer / self.cutin_duration
+        
+        # テキストの移動位置を計算（右から左へ）
+        text_width = len(self.cutin_text) * 4  # 1文字4ピクセルと仮定
+        start_x = screen_width + text_width  # 画面右端外から開始
+        end_x = (screen_width - text_width) // 2  # 画面中央で停止
+        
+        # イージング（加速度的な動き）
+        if progress < 0.8:
+            # 最初の80%で右から中央へ移動
+            eased_progress = 1 - (1 - progress / 0.8) ** 3  # イージングアウト
+            text_x = start_x - (start_x - end_x) * eased_progress
+        else:
+            # 残り20%で中央に留まる
+            text_x = end_x
+        
+        text_y = screen_height // 2 - 4  # 画面中央の縦位置
+        
+        # ターンによって色を変更
+        if self.current_turn == "player":
+            text_color = 11  # ライトブルー
+            bg_color = 1     # 濃い青
+        else:
+            text_color = 8   # 赤
+            bg_color = 2     # 濃い赤
+        
+        # 背景バーを描画
+        bar_height = 24
+        bar_y = text_y - 8
+        pyxel.rect(0, bar_y, screen_width, bar_height, bg_color)
+        
+        # テキストを描画
+        pyxel.text(int(text_x), text_y, self.cutin_text, text_color)
