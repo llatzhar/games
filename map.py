@@ -1,5 +1,6 @@
 import pyxel
 import math
+import random
 
 # game.pyから定数をインポート
 from game import screen_width, screen_height, char_width, char_height, Scene
@@ -35,8 +36,12 @@ class Player(Character):
         super().__init__(x, y, current_city, speed=2)
 
 class Enemy(Character):
-    def __init__(self, x, y, current_city=None):
+    def __init__(self, x, y, current_city=None, ai_type="random"):
         super().__init__(x, y, current_city, speed=1)  # 敵の移動速度（プレイヤーより遅く設定）
+        self.ai_type = ai_type  # AI behavior type: "random", "aggressive", "defensive", "patrol"
+        self.patrol_cities = []  # For patrol AI - list of cities to patrol between
+        self.patrol_index = 0   # Current index in patrol route
+        self.last_player_position = None  # For tracking player movement
 
 class MapScene(Scene):
     def __init__(self):
@@ -88,9 +93,17 @@ class MapScene(Scene):
         
         # 敵キャラクターリスト（右端の2Cityに配置）
         self.enemies = [
-            Enemy(self.cities[4].x, self.cities[4].y, self.cities[4]),  # 敵1 → Town E
-            Enemy(self.cities[5].x, self.cities[5].y, self.cities[5]),  # 敵2 → Town F
+            Enemy(self.cities[4].x, self.cities[4].y, self.cities[4], "aggressive"),  # 敵1 → Town E (aggressive AI)
+            Enemy(self.cities[5].x, self.cities[5].y, self.cities[5], "patrol"),     # 敵2 → Town F (patrol AI)
         ]
+        
+        # Patrol AI用のルートを設定
+        self.enemies[1].patrol_cities = [self.cities[5], self.cities[3], self.cities[1], self.cities[4]]  # F->D->B->E循環
+        
+        # AI処理用のタイマー
+        self.ai_timer = 0
+        self.ai_decision_delay = 60  # 2秒間（30fps * 2秒）で敵が行動を決定
+        self.current_ai_enemy = None  # 現在AI処理中の敵
         
         # City間の道路を定義
         self.roads = [
@@ -124,6 +137,161 @@ class MapScene(Scene):
                     map_row.append(0)
             map_data.append(map_row)
         return map_data
+
+    def get_connected_cities(self, city):
+        """指定したCityに接続されているCityのリストを取得"""
+        connected = []
+        for road in self.roads:
+            if road.city1 == city:
+                connected.append(road.city2)
+            elif road.city2 == city:
+                connected.append(road.city1)
+        return connected
+    
+    def get_distance_to_nearest_player(self, enemy_city):
+        """指定したCityから最も近いプレイヤーまでの距離を計算"""
+        min_distance = float('inf')
+        nearest_player = None
+        
+        for player in self.players:
+            if player.current_city:
+                dx = player.current_city.x - enemy_city.x
+                dy = player.current_city.y - enemy_city.y
+                distance = (dx * dx + dy * dy) ** 0.5
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_player = player
+        
+        return min_distance, nearest_player
+    
+    def find_path_to_target(self, start_city, target_city):
+        """簡単なパス検索（BFS）で目標Cityへの最短経路を見つける"""
+        if start_city == target_city:
+            return []
+        
+        # BFS for pathfinding
+        queue = [(start_city, [])]
+        visited = {start_city}
+        
+        while queue:
+            current_city, path = queue.pop(0)
+            
+            for connected_city in self.get_connected_cities(current_city):
+                if connected_city == target_city:
+                    return path + [connected_city]
+                
+                if connected_city not in visited:
+                    visited.add(connected_city)
+                    queue.append((connected_city, path + [connected_city]))
+        
+        return []  # No path found
+    
+    def decide_enemy_action(self, enemy):
+        """敵のAIに基づいて行動を決定"""
+        if not enemy.current_city:
+            return None
+        
+        connected_cities = self.get_connected_cities(enemy.current_city)
+        if not connected_cities:
+            return None
+        
+        if enemy.ai_type == "random":
+            # ランダムに接続されたCityから選択
+            return random.choice(connected_cities)
+        
+        elif enemy.ai_type == "aggressive":
+            # プレイヤーに近づこうとする行動
+            min_distance, nearest_player = self.get_distance_to_nearest_player(enemy.current_city)
+            
+            if nearest_player and nearest_player.current_city:
+                # プレイヤーに向かうパスを検索
+                path = self.find_path_to_target(enemy.current_city, nearest_player.current_city)
+                if path:
+                    # パスの最初のステップに移動
+                    return path[0]
+            
+            # プレイヤーが見つからない場合はランダム移動
+            return random.choice(connected_cities)
+        
+        elif enemy.ai_type == "defensive":
+            # プレイヤーから遠ざかろうとする行動
+            min_distance, nearest_player = self.get_distance_to_nearest_player(enemy.current_city)
+            
+            if nearest_player and nearest_player.current_city:
+                best_city = None
+                max_distance = min_distance
+                
+                # 接続されたCityの中で最もプレイヤーから遠いCityを選択
+                for city in connected_cities:
+                    dx = nearest_player.current_city.x - city.x
+                    dy = nearest_player.current_city.y - city.y
+                    distance = (dx * dx + dy * dy) ** 0.5
+                    
+                    if distance > max_distance:
+                        max_distance = distance
+                        best_city = city
+                
+                if best_city:
+                    return best_city
+            
+            # 遠ざかる場所がない場合はランダム移動
+            return random.choice(connected_cities)
+        
+        elif enemy.ai_type == "patrol":
+            # パトロールルートに沿って移動
+            if enemy.patrol_cities and len(enemy.patrol_cities) > 1:
+                # 次のパトロール地点を取得
+                next_index = (enemy.patrol_index + 1) % len(enemy.patrol_cities)
+                target_city = enemy.patrol_cities[next_index]
+                
+                # 現在位置から次のパトロール地点への経路を検索
+                path = self.find_path_to_target(enemy.current_city, target_city)
+                if path:
+                    # パスの最初のステップに移動
+                    return path[0]
+                else:
+                    # 直接接続されているかチェック
+                    if target_city in connected_cities:
+                        enemy.patrol_index = next_index
+                        return target_city
+            
+            # パトロールルートが設定されていない場合はランダム移動
+            return random.choice(connected_cities)
+        
+        # デフォルトはランダム移動
+        return random.choice(connected_cities)
+    
+    def execute_enemy_ai_turn(self):
+        """敵のAIターンを実行"""
+        if self.current_turn != "enemy" or self.enemy_moved_this_turn:
+            return
+        
+        # まだ移動していない敵を選択
+        available_enemies = [enemy for enemy in self.enemies if not enemy.is_moving]
+        if not available_enemies:
+            return
+        
+        # ランダムに敵を選択
+        selected_enemy = random.choice(available_enemies)
+        self.current_ai_enemy = selected_enemy  # 現在AI処理中の敵を記録
+        
+        # AIに基づいて移動先を決定
+        target_city = self.decide_enemy_action(selected_enemy)
+        
+        if target_city and self.is_cities_connected(selected_enemy.current_city, target_city):
+            # 移動実行
+            selected_enemy.target_x = target_city.x
+            selected_enemy.target_y = target_city.y
+            selected_enemy.target_city = target_city
+            selected_enemy.is_moving = True
+            self.enemy_moved_this_turn = True
+              # パトロールAIの場合はインデックスを更新
+            if selected_enemy.ai_type == "patrol" and target_city in selected_enemy.patrol_cities:
+                selected_enemy.patrol_index = selected_enemy.patrol_cities.index(target_city)
+        
+        self.current_ai_enemy = None  # AI処理完了
+        if selected_enemy.ai_type == "patrol" and target_city in selected_enemy.patrol_cities:
+            selected_enemy.patrol_index = selected_enemy.patrol_cities.index(target_city)
 
     def get_character_positions_by_city(self):
         """各Cityにいるキャラクターを収集して辞書で返す"""
@@ -234,7 +402,6 @@ class MapScene(Scene):
         """2つの線分が交差するかチェック"""
         def ccw(ax, ay, bx, by, cx, cy):
             return (cy - ay) * (bx - ax) > (by - ay) * (cx - ax)
-        
         return ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and \
                ccw(x1, y1, x2, y2, x3, y3) != ccw(x1, y1, x2, y2, x4, y4)
 
@@ -244,11 +411,13 @@ class MapScene(Scene):
             self.current_turn = "enemy"
             self.player_moved_this_turn = False
             self.selected_player = None  # プレイヤー選択を解除
+            self.ai_timer = 0  # AIタイマーをリセット
         else:
             self.current_turn = "player"
             self.enemy_moved_this_turn = False
             self.selected_enemy = None  # 敵選択を解除
             self.turn_counter += 1  # プレイヤーターンの開始で新しいターン番号
+            self.ai_timer = 0  # AIタイマーをリセット
     
     def can_move_this_turn(self):
         """このターンで移動可能かチェック"""
@@ -315,6 +484,17 @@ class MapScene(Scene):
             if not any(player.is_moving for player in self.players) and \
                not any(enemy.is_moving for enemy in self.enemies):
                 self.switch_turn()
+        
+        # 敵のAI処理（エネミーターン時）
+        if self.current_turn == "enemy" and self.can_move_this_turn():
+            # 敵が移動していない場合のみAIタイマーを進める
+            if not any(enemy.is_moving for enemy in self.enemies):
+                self.ai_timer += 1
+                
+                # AI決定遅延時間が経過したら敵の行動を実行
+                if self.ai_timer >= self.ai_decision_delay:
+                    self.execute_enemy_ai_turn()
+                    self.ai_timer = 0
         
         # マウスクリック検出
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
@@ -626,6 +806,25 @@ class MapScene(Scene):
                     enemy.height, # 高さ
                     0   # 透明色（黒を透明にする）
                 )
+                  # AI種別インジケーターを表示（敵の上に小さな色付きの円）
+                indicator_x = int(enemy_screen_x)
+                indicator_y = int(enemy_screen_y - half_height - 6)
+                
+                if enemy.ai_type == "aggressive":
+                    pyxel.circ(indicator_x, indicator_y, 2, 8)  # 赤色
+                elif enemy.ai_type == "patrol":
+                    pyxel.circ(indicator_x, indicator_y, 2, 11)  # ライトブルー
+                elif enemy.ai_type == "defensive":
+                    pyxel.circ(indicator_x, indicator_y, 2, 3)  # 緑色
+                else:  # random
+                    pyxel.circ(indicator_x, indicator_y, 2, 14)  # ピンク
+                
+                # AI思考中のインジケーター（エネミーターン時にAIタイマーが動いている間）
+                if (self.current_turn == "enemy" and self.ai_timer > 0 and 
+                    enemy == self.current_ai_enemy):
+                    # 点滅する思考インジケーター
+                    if (pyxel.frame_count // 5) % 2 == 0:
+                        pyxel.circ(int(enemy_screen_x), int(enemy_screen_y - half_height - 12), 3, 7)  # 白色の思考バブル
                 
                 # 選択された敵に点滅する枠線を描画（エネミーターン時）
                 if enemy == self.selected_enemy and self.current_turn == "enemy":
@@ -685,16 +884,35 @@ class MapScene(Scene):
             pyxel.text(5, 127, "Enemies:", 14)
             for i, enemy in enumerate(self.enemies):
                 enemy_city_name = enemy.current_city.name if enemy.current_city else "None"
-                enemy_info = f"Enemy {i+1} at {enemy_city_name}: ({int(enemy.x)}, {int(enemy.y)})"
+                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {enemy_city_name}: ({int(enemy.x)}, {int(enemy.y)})"
                 pyxel.text(5, 137 + i * 8, enemy_info, 8)
+            
+            # AI凡例を表示
+            pyxel.text(5, 155, "AI Legend:", 14)
+            pyxel.circ(15, 163, 2, 8)   # 赤色
+            pyxel.text(20, 161, "Aggressive", 7)
+            pyxel.circ(80, 163, 2, 11)  # ライトブルー  
+            pyxel.text(85, 161, "Patrol", 7)
+            pyxel.circ(15, 171, 2, 3)   # 緑色
+            pyxel.text(20, 169, "Defensive", 7)
+            pyxel.circ(80, 171, 2, 14)  # ピンク
+            pyxel.text(85, 169, "Random", 7)
+            
+            # AI情報を表示（エネミーターン時）
+            if self.current_turn == "enemy":
+                ai_info = f"AI Timer: {self.ai_timer}/{self.ai_decision_delay}"
+                pyxel.text(5, 181, ai_info, 8)
+            
             # マウスクリック座標を表示
             if self.click_timer > 0:
                 coord_text = f"Click: ({self.click_x}, {self.click_y})"
-                pyxel.text(5, 153, coord_text, 8)
+                y_pos = 191 if self.current_turn == "enemy" else 181
+                pyxel.text(5, y_pos, coord_text, 8)
                 
             # 現在のマウス座標も表示
             mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
-            pyxel.text(5, 163, mouse_text, 10)
+            y_pos = 201 if self.current_turn == "enemy" else 191
+            pyxel.text(5, y_pos, mouse_text, 10)
         else:
             # デバッグ情報非表示時は最小限の情報のみ
             pyxel.text(5, 5, "Press V for debug info", 8)
