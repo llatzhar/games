@@ -16,13 +16,13 @@ class Road:
         self.city1 = city1
         self.city2 = city2
 
-class Player:
-    def __init__(self, x, y, current_city=None):
+class Character:
+    def __init__(self, x, y, current_city=None, speed=1):
         self.x = x
         self.y = y
         self.width = char_width
         self.height = char_height
-        self.speed = 2
+        self.speed = speed
         self.target_x = None  # 移動目標X座標
         self.target_y = None  # 移動目標Y座標
         self.target_city = None  # 移動目標City
@@ -30,20 +30,13 @@ class Player:
         self.facing_right = True  # 向いている方向（True: 右, False: 左）
         self.current_city = current_city  # 現在位置のCity参照
 
-class Enemy:
+class Player(Character):
     def __init__(self, x, y, current_city=None):
-        self.x = x
-        self.y = y
-        self.width = char_width
-        self.height = char_height
-        self.speed = 1  # 敵の移動速度（プレイヤーより遅く設定）
-        self.current_city = current_city  # 現在位置のCity参照
-        self.facing_right = True  # 向いている方向（True: 右, False: 左）
-        # ターンベース移動のための変数を追加
-        self.target_x = None  # 移動目標X座標
-        self.target_y = None  # 移動目標Y座標
-        self.target_city = None  # 移動目標City
-        self.is_moving = False  # 移動中フラグ
+        super().__init__(x, y, current_city, speed=2)
+
+class Enemy(Character):
+    def __init__(self, x, y, current_city=None):
+        super().__init__(x, y, current_city, speed=1)  # 敵の移動速度（プレイヤーより遅く設定）
 
 class MapScene(Scene):
     def __init__(self):
