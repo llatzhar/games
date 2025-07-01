@@ -71,33 +71,38 @@ class MapScene(Scene):
         # マップ全体のピクセルサイズ
         self.map_pixel_width = self.map_width * self.tile_size
         self.map_pixel_height = self.map_height * self.tile_size
-        
-        # Cityを定義（4つの街）
+        # Cityを定義（6つの街）
         self.cities = [
             City("Town A", 2 * self.tile_size, 2 * self.tile_size),      # 左上 (32, 32)
-            City("Town B", 7 * self.tile_size, 2 * self.tile_size),      # 右上 (112, 32)
+            City("Town B", 7 * self.tile_size, 2 * self.tile_size),      # 中上 (112, 32)
             City("Town C", 2 * self.tile_size, 6 * self.tile_size),      # 左下 (32, 96)
-            City("Town D", 7 * self.tile_size, 6 * self.tile_size),      # 右下 (112, 96)
+            City("Town D", 7 * self.tile_size, 6 * self.tile_size),      # 中下 (112, 96)
+            City("Town E", 12 * self.tile_size, 2 * self.tile_size),     # 右上 (192, 32)
+            City("Town F", 12 * self.tile_size, 6 * self.tile_size),     # 右下 (192, 96)
         ]
-        # プレイヤーリスト（複数を同じCityに配置してテスト）
+        # プレイヤーリスト（左端の2Cityに配置）
         self.players = [
             Player(self.cities[0].x, self.cities[0].y, self.cities[0]),  # プレイヤー1 → Town A
-            Player(self.cities[0].x, self.cities[0].y, self.cities[0]),  # プレイヤー2 → Town A（重なりテスト）
+            Player(self.cities[2].x, self.cities[2].y, self.cities[2]),  # プレイヤー2 → Town C
         ]
         
-        # 敵キャラクターリスト（Town Aに配置して重なりをテスト）
+        # 敵キャラクターリスト（右端の2Cityに配置）
         self.enemies = [
-            Enemy(self.cities[0].x, self.cities[0].y, self.cities[0]),  # 敵1 → Town A（重なりテスト）
-            Enemy(self.cities[3].x, self.cities[3].y, self.cities[3]),  # 敵2 → Town D
+            Enemy(self.cities[4].x, self.cities[4].y, self.cities[4]),  # 敵1 → Town E
+            Enemy(self.cities[5].x, self.cities[5].y, self.cities[5]),  # 敵2 → Town F
         ]
         
         # City間の道路を定義
         self.roads = [
             Road(self.cities[0], self.cities[1]),  # Town A - Town B
+            Road(self.cities[1], self.cities[4]),  # Town B - Town E
             Road(self.cities[0], self.cities[2]),  # Town A - Town C
-            Road(self.cities[1], self.cities[3]),  # Town B - Town D
             Road(self.cities[2], self.cities[3]),  # Town C - Town D
+            Road(self.cities[3], self.cities[5]),  # Town D - Town F
+            Road(self.cities[1], self.cities[3]),  # Town B - Town D
+            Road(self.cities[4], self.cities[5]),  # Town E - Town F
             Road(self.cities[0], self.cities[3]),  # Town A - Town D (対角線)
+            Road(self.cities[1], self.cities[5]),  # Town B - Town F (対角線)
         ]
 
     def generate_30x30_map(self):
