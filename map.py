@@ -106,25 +106,7 @@ class MapScene(Scene):
             Road(self.cities[2], self.cities[3]),  # Town C - Town D
             Road(self.cities[0], self.cities[3]),  # Town A - Town D (対角線)
         ]
-        
-        # City周辺を通行可能にする
-        self.clear_city_areas()
-        
-    def clear_city_areas(self):
-        """City周辺を通行可能にする"""
-        for city in self.cities:
-            # Cityの中心座標をタイル座標に変換
-            center_col = int(city.x // self.tile_size)
-            center_row = int(city.y // self.tile_size)
-            
-            # City周辺3x3エリアを通行可能にする
-            for dr in range(-1, 2):
-                for dc in range(-1, 2):
-                    row = center_row + dr
-                    col = center_col + dc
-                    if 0 < row < self.map_height - 1 and 0 < col < self.map_width - 1:
-                        self.map_data[row][col] = 0
-                        
+
     def generate_30x30_map(self):
         """30x30のマップを生成"""
         map_data = []
@@ -144,33 +126,6 @@ class MapScene(Scene):
                     map_row.append(0)
             map_data.append(map_row)
         return map_data
-        
-    def can_move_to(self, x, y):
-        """指定座標に移動可能かチェック"""
-        half_width = char_width // 2
-        half_height = char_height // 2
-        corners = [
-            (x - half_width, y - half_height),  # 左上
-            (x + half_width, y - half_height),  # 右上
-            (x - half_width, y + half_height),  # 左下
-            (x + half_width, y + half_height)   # 右下
-        ]
-        
-        # 各角がマップ範囲内かつ壁でないかチェック
-        for corner_x, corner_y in corners:
-            # マップ座標に変換
-            map_col = int(corner_x // self.tile_size)
-            map_row = int(corner_y // self.tile_size)
-            
-            # マップ範囲外は移動不可
-            if map_col < 0 or map_col >= self.map_width or map_row < 0 or map_row >= self.map_height:
-                return False
-                
-            # 壁は移動不可
-            if self.map_data[map_row][map_col] == 1:
-                return False
-                
-        return True
 
     def get_character_positions_by_city(self):
         """各Cityにいるキャラクターを収集して辞書で返す"""
