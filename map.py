@@ -6,6 +6,7 @@ import random
 from game import screen_width, screen_height, char_width, char_height, Scene, SubScene
 from game_state import GameState, City, Road, Player, Enemy
 from cutin import CutinSubScene
+from battle import BattleSubScene
 
 class MapScene(Scene):
     def __init__(self):
@@ -25,6 +26,11 @@ class MapScene(Scene):
             self.game_state.save_to_file()  # 初回作成時はセーブ
         
         self.selected_enemy = None  # 選択中の敵（エネミーターン用）
+        
+        # 戦闘処理用
+        self.pending_battle_results = []  # 処理待ちの戦闘結果
+        self.current_battle_index = 0  # 現在処理中の戦闘インデックス
+        self.is_processing_battles = False  # 戦闘処理中フラグ
         
         # カメラ位置（ビューの左上座標）- MapSceneが保持
         self.camera_x = 0
@@ -409,14 +415,102 @@ class MapScene(Scene):
         return ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and \
                ccw(x1, y1, x2, y2, x3, y3) != ccw(x1, y1, x2, y2, x4, y4)
 
+    def start_battle_sequence(self, battle_results):
+        """戦闘シーケンスを開始"""
+        if not battle_results:
+            return
+            
+        self.pending_battle_results = battle_results
+        self.current_battle_index = 0
+        self.is_processing_battles = True
+        
+        # 最初の戦闘がある都市にカメラを移動
+        self.process_next_battle()
+    
+    def process_next_battle(self):
+        """次の戦闘を処理"""
+        if self.current_battle_index >= len(self.pending_battle_results):
+            # 全ての戦闘処理が完了
+            self.finish_battle_sequence()
+            return
+            
+        current_battle = self.pending_battle_results[self.current_battle_index]
+        city_name = current_battle['city_name']
+        city = self.game_state.get_city_by_name(city_name)
+        
+        if city:
+            # 戦闘があった都市にカメラを移動
+            self.move_camera_to_city(city)
+            
+            # 少し待ってから戦闘サブシーンを開始
+            self.battle_camera_timer = 60  # 2秒待機
+    
+    def move_camera_to_city(self, city):
+        """カメラを指定した都市に移動"""
+        target_camera_x = city.x - self.camera_offset_x
+        target_camera_y = city.y - self.camera_offset_y
+        
+        # マップ範囲内に制限
+        target_camera_x = max(0, min(target_camera_x, self.map_pixel_width - screen_width))
+        target_camera_y = max(0, min(target_camera_y, self.map_pixel_height - screen_height))
+        
+        # カメラ位置を即座に設定（アニメーションなしで即移動）
+        self.camera_x = target_camera_x
+        self.camera_y = target_camera_y
+        
+        # カメラ追従をクリア
+        self.clear_camera_follow()
+    
+    def start_current_battle_scene(self):
+        """現在の戦闘のBattleSubSceneを開始"""
+        current_battle = self.pending_battle_results[self.current_battle_index]
+        city_name = current_battle['city_name']
+        city = self.game_state.get_city_by_name(city_name)
+        
+        if city:
+            # BattleSubSceneを開始
+            battle_sub_scene = BattleSubScene(self, current_battle, city)
+            self.set_sub_scene(battle_sub_scene)
+    
+    def on_battle_scene_finished(self):
+        """戦闘シーンが終了した時の処理"""
+        self.current_battle_index += 1
+        
+        if self.current_battle_index < len(self.pending_battle_results):
+            # 次の戦闘を処理
+            self.process_next_battle()
+        else:
+            # 全ての戦闘処理が完了
+            self.finish_battle_sequence()
+    
+    def finish_battle_sequence(self):
+        """戦闘シーケンスを終了"""
+        self.is_processing_battles = False
+        self.pending_battle_results = []
+        self.current_battle_index = 0
+        
+        # ターン切り替えのカットインを表示
+        if self.game_state.current_turn == "player":
+            cutin_text = "ENEMY TURN"
+        else:
+            cutin_text = "PLAYER TURN"
+            
+        self.set_sub_scene(CutinSubScene(self, cutin_text))
+
+    def on_sub_scene_finished(self, finished_sub_scene):
+        """サブシーン終了時の処理"""
+        # BattleSubSceneが終了した場合
+        if isinstance(finished_sub_scene, BattleSubScene):
+            self.on_battle_scene_finished()
+
     def switch_turn(self):
         """ターンを切り替える"""
         # ターン終了時に戦闘をチェック・実行
         battle_results = self.game_state.check_and_execute_battles()
         
+        # ターン状態を更新
         if self.game_state.current_turn == "player":
             self.game_state.current_turn = "enemy"
-            cutin_text = "ENEMY TURN"
             self.game_state.player_moved_this_turn = False
             self.selected_player = None  # プレイヤー選択を解除
             self.game_state.ai_timer = 0  # AIタイマーをリセット
@@ -424,7 +518,6 @@ class MapScene(Scene):
             self.clear_camera_follow()
         else:
             self.game_state.current_turn = "player"
-            cutin_text = "PLAYER TURN"
             self.game_state.enemy_moved_this_turn = False
             self.selected_enemy = None  # 敵選択を解除
             self.game_state.turn_counter += 1  # プレイヤーターンの開始で新しいターン番号
@@ -432,13 +525,17 @@ class MapScene(Scene):
             # エネミーターンからプレイヤーターンに切り替わる際はカメラ追従をクリア
             self.clear_camera_follow()
         
-        # 戦闘結果がある場合は戦闘情報も表示
+        # 戦闘結果がある場合は戦闘シーケンスを開始
         if battle_results:
-            battle_info = f" - {len(battle_results)} battle(s) occurred!"
-            cutin_text += battle_info
-        
-        # カットインサブシーンを開始
-        self.set_sub_scene(CutinSubScene(self, cutin_text))
+            self.start_battle_sequence(battle_results)
+        else:
+            # 戦闘がない場合は通常のターン切り替えカットイン
+            if self.game_state.current_turn == "player":
+                cutin_text = "PLAYER TURN"
+            else:
+                cutin_text = "ENEMY TURN"
+            
+            self.set_sub_scene(CutinSubScene(self, cutin_text))
         
         # ターン切り替え時に自動セーブ
         self.game_state.auto_save()
@@ -490,6 +587,21 @@ class MapScene(Scene):
     def update(self):
         # サブシーンの処理を先に実行
         if super().update():
+            return self
+        
+        # 戦闘処理中の場合
+        if self.is_processing_battles:
+            # Qキーでタイトルシーンに戻ることは可能
+            if pyxel.btnp(pyxel.KEY_Q):
+                from game import TitleScene
+                return TitleScene()
+                
+            # カメラ移動後の待機時間
+            if hasattr(self, 'battle_camera_timer'):
+                self.battle_camera_timer -= 1
+                if self.battle_camera_timer <= 0:
+                    delattr(self, 'battle_camera_timer')
+                    self.start_current_battle_scene()
             return self
         
         # メインの処理
@@ -1029,15 +1141,27 @@ class MapScene(Scene):
             if self.game_state.current_turn == "enemy":
                 ai_info = f"AI Timer: {self.game_state.ai_timer}/{self.game_state.ai_decision_delay}"
                 pyxel.text(5, 216, ai_info, 8)
+            
+            # 戦闘処理状態を表示
+            if self.is_processing_battles:
+                battle_info = f"Processing battles: {self.current_battle_index + 1}/{len(self.pending_battle_results)}"
+                y_pos = 226 if self.game_state.current_turn == "enemy" else 216
+                pyxel.text(5, y_pos, battle_info, 13)
             # マウスクリック座標を表示
             if self.click_timer > 0:
                 coord_text = f"Click: ({self.click_x}, {self.click_y})"
-                y_pos = 226 if self.game_state.current_turn == "enemy" else 216
+                if self.is_processing_battles:
+                    y_pos = 236 if self.game_state.current_turn == "enemy" else 226
+                else:
+                    y_pos = 226 if self.game_state.current_turn == "enemy" else 216
                 pyxel.text(5, y_pos, coord_text, 8)
                 
             # 現在のマウス座標も表示
             mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
-            y_pos = 236 if self.game_state.current_turn == "enemy" else 226
+            if self.is_processing_battles:
+                y_pos = 246 if self.game_state.current_turn == "enemy" else 236
+            else:
+                y_pos = 236 if self.game_state.current_turn == "enemy" else 226
             pyxel.text(5, y_pos, mouse_text, 10)
         else:
             # デバッグ情報非表示時は最小限の情報のみ

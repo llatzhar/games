@@ -16,12 +16,18 @@ class Scene:
         if self.sub_scene:
             result = self.sub_scene.update()
             if result is None:  # サブシーンが終了
+                # サブシーン終了時のコールバック処理
+                self.on_sub_scene_finished(self.sub_scene)
                 self.sub_scene = None
                 return False  # サブシーン終了、メイン処理を続行
             return True  # サブシーン実行中
         
         # サブシーンがない場合はメイン処理を実行
         return False
+    
+    def on_sub_scene_finished(self, finished_sub_scene):
+        """サブシーン終了時に呼び出されるコールバック（継承クラスでオーバーライド可能）"""
+        pass
 
     def draw(self):
         # サブシーンがある場合はサブシーンを描画
