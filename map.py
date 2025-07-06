@@ -3,11 +3,12 @@ import math
 import random
 
 # game.pyから定数をインポート
-from game import screen_width, screen_height, char_width, char_height, Scene
+from game import screen_width, screen_height, char_width, char_height, Scene, SubScene
 from game_state import GameState, City, Road, Player, Enemy
 
 class MapScene(Scene):
     def __init__(self):
+        super().__init__()
         self.click_x = -1  # クリック位置のX座標
         self.click_y = -1  # クリック位置のY座標
         self.click_timer = 0  # クリック座標表示時間
@@ -23,12 +24,6 @@ class MapScene(Scene):
             self.game_state.save_to_file()  # 初回作成時はセーブ
         
         self.selected_enemy = None  # 選択中の敵（エネミーターン用）
-        
-        # カットイン演出用変数
-        self.is_showing_cutin = False  # カットイン演出中フラグ
-        self.cutin_timer = 0  # カットイン演出タイマー
-        self.cutin_duration = 60  # カットイン演出時間（2秒 = 60フレーム）
-        self.cutin_text = ""  # カットインで表示するテキスト
         
         # カメラ位置（ビューの左上座標）- MapSceneが保持
         self.camera_x = 0
@@ -415,13 +410,9 @@ class MapScene(Scene):
 
     def switch_turn(self):
         """ターンを切り替える"""
-        # カットイン演出を開始
-        self.is_showing_cutin = True
-        self.cutin_timer = 0
-        
         if self.game_state.current_turn == "player":
             self.game_state.current_turn = "enemy"
-            self.cutin_text = "ENEMY TURN"
+            cutin_text = "ENEMY TURN"
             self.game_state.player_moved_this_turn = False
             self.selected_player = None  # プレイヤー選択を解除
             self.game_state.ai_timer = 0  # AIタイマーをリセット
@@ -429,13 +420,16 @@ class MapScene(Scene):
             self.clear_camera_follow()
         else:
             self.game_state.current_turn = "player"
-            self.cutin_text = "PLAYER TURN"
+            cutin_text = "PLAYER TURN"
             self.game_state.enemy_moved_this_turn = False
             self.selected_enemy = None  # 敵選択を解除
             self.game_state.turn_counter += 1  # プレイヤーターンの開始で新しいターン番号
             self.game_state.ai_timer = 0  # AIタイマーをリセット
             # エネミーターンからプレイヤーターンに切り替わる際はカメラ追従をクリア
             self.clear_camera_follow()
+        
+        # カットインサブシーンを開始
+        self.set_sub_scene(CutinSubScene(self, cutin_text))
         
         # ターン切り替え時に自動セーブ
         self.game_state.auto_save()
@@ -485,15 +479,11 @@ class MapScene(Scene):
         return None
 
     def update(self):
-        # カットイン演出の処理
-        if self.is_showing_cutin:
-            self.cutin_timer += 1
-            if self.cutin_timer >= self.cutin_duration:
-                self.is_showing_cutin = False
-                self.cutin_timer = 0
-            # カットイン演出中は他の操作を受け付けない
+        # サブシーンの処理を先に実行
+        if super().update():
             return self
         
+        # メインの処理
         # Qキーでタイトルシーンに戻る
         if pyxel.btnp(pyxel.KEY_Q):
             from game import TitleScene
@@ -679,6 +669,11 @@ class MapScene(Scene):
 
 
     def draw(self):
+        # サブシーンがある場合はサブシーンを描画
+        if super().draw():
+            return
+        
+        # メインの描画
         pyxel.cls(3)  # 背景色
         
         # 画面に表示するタイルの範囲を計算
@@ -986,21 +981,41 @@ class MapScene(Scene):
         else:
             # デバッグ情報非表示時は最小限の情報のみ
             pyxel.text(5, 5, "Press V for debug info", 8)
-        
-        # カットイン演出の描画
-        if self.is_showing_cutin:
-            self.draw_cutin_animation()
+
+class CutinSubScene(SubScene):
+    """カットイン演出を表示するサブシーン"""
+    def __init__(self, parent_scene, text, duration=60):
+        super().__init__(parent_scene)
+        self.text = text
+        self.duration = duration  # 演出時間（フレーム数）
+        self.timer = 0
     
-    def draw_cutin_animation(self):
+    def update(self):
+        # 親クラスのサブシーン処理を実行（ただし、サブシーンのサブシーンは想定していない）
+        if super().update():
+            return self
+        
+        # メイン処理
+        self.timer += 1
+        if self.timer >= self.duration:
+            return self.finish()  # サブシーンを終了
+        return self
+    
+    def draw(self):
+        # 親クラスのサブシーン描画を実行（ただし、サブシーンのサブシーンは想定していない）
+        if super().draw():
+            return
+        
+        # メイン描画
         """カットイン演出を描画"""
         # 背景を暗くする
         pyxel.rect(0, 0, screen_width, screen_height, 0)
         
         # アニメーション進行度を計算（0.0から1.0）
-        progress = self.cutin_timer / self.cutin_duration
+        progress = self.timer / self.duration
         
         # テキストの移動位置を計算（右から左へ）
-        text_width = len(self.cutin_text) * 4  # 1文字4ピクセルと仮定
+        text_width = len(self.text) * 4  # 1文字4ピクセルと仮定
         start_x = screen_width + text_width  # 画面右端外から開始
         end_x = (screen_width - text_width) // 2  # 画面中央で停止
         
@@ -1016,7 +1031,7 @@ class MapScene(Scene):
         text_y = screen_height // 2 - 4  # 画面中央の縦位置
         
         # ターンによって色を変更
-        if self.game_state.current_turn == "player":
+        if "PLAYER" in self.text:
             text_color = 11  # ライトブルー
             bg_color = 1     # 濃い青
         else:
@@ -1029,4 +1044,4 @@ class MapScene(Scene):
         pyxel.rect(0, bar_y, screen_width, bar_height, bg_color)
         
         # テキストを描画
-        pyxel.text(int(text_x), text_y, self.cutin_text, text_color)
+        pyxel.text(int(text_x), text_y, self.text, text_color)
