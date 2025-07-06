@@ -39,7 +39,7 @@ class Road:
         return cls(data['city1_name'], data['city2_name'])
 
 class Character:
-    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, speed: float = 1):
+    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, speed: float = 1, life: int = 100, attack: int = 20):
         self.x = x
         self.y = y
         self.width = 16  # char_width相当
@@ -51,6 +51,11 @@ class Character:
         self.is_moving = False
         self.facing_right = True
         self.current_city_name = current_city_name
+        
+        # 戦闘ステータス
+        self.life = life  # 残兵力（0になると消滅）
+        self.max_life = life  # 最大兵力
+        self.attack = attack  # 攻撃力
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -64,7 +69,10 @@ class Character:
             'target_city_name': self.target_city_name,
             'is_moving': self.is_moving,
             'facing_right': self.facing_right,
-            'current_city_name': self.current_city_name
+            'current_city_name': self.current_city_name,
+            'life': self.life,
+            'max_life': self.max_life,
+            'attack': self.attack
         }
     
     def update_from_dict(self, data: Dict[str, Any]):
@@ -80,10 +88,13 @@ class Character:
         self.is_moving = data.get('is_moving', False)
         self.facing_right = data.get('facing_right', True)
         self.current_city_name = data.get('current_city_name')
+        self.life = data.get('life', 100)
+        self.max_life = data.get('max_life', 100)
+        self.attack = data.get('attack', 20)
 
 class Player(Character):
     def __init__(self, x: float, y: float, current_city_name: Optional[str] = None):
-        super().__init__(x, y, current_city_name, speed=2)
+        super().__init__(x, y, current_city_name, speed=2, life=120, attack=25)
     
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
@@ -98,7 +109,7 @@ class Player(Character):
 
 class Enemy(Character):
     def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, ai_type: str = "random"):
-        super().__init__(x, y, current_city_name, speed=1)
+        super().__init__(x, y, current_city_name, speed=1, life=80, attack=20)
         self.ai_type = ai_type
         self.patrol_city_names: List[str] = []
         self.patrol_index = 0
@@ -290,6 +301,78 @@ class GameState:
             print(f"Failed to load game state: {e}")
             return False
     
+    def check_and_execute_battles(self):
+        """各都市で戦闘をチェックし実行する"""
+        battle_results = []
+        
+        for city_name, city in self.cities.items():
+            # この都市にいるプレイヤーと敵を取得
+            players_in_city = [p for p in self.players if p.current_city_name == city_name and not p.is_moving]
+            enemies_in_city = [e for e in self.enemies if e.current_city_name == city_name and not e.is_moving]
+            
+            # プレイヤーと敵の両方がいる場合は戦闘
+            if players_in_city and enemies_in_city:
+                battle_result = self.execute_battle(city_name, players_in_city, enemies_in_city)
+                if battle_result:
+                    battle_results.append(battle_result)
+        
+        # 戦闘で倒されたキャラクターを削除
+        self.remove_defeated_characters()
+        
+        return battle_results
+    
+    def execute_battle(self, city_name: str, players: List[Player], enemies: List[Enemy]) -> Dict[str, Any]:
+        """指定した都市での戦闘を実行"""
+        battle_log = []
+        
+        # プレイヤーの攻撃フェーズ
+        total_player_attack = sum(p.attack for p in players)
+        if enemies:
+            # 最も弱い敵から攻撃
+            target_enemy = min(enemies, key=lambda e: e.life)
+            damage = min(total_player_attack, target_enemy.life)
+            target_enemy.life -= damage
+            battle_log.append(f"Players dealt {damage} damage to {target_enemy.ai_type} enemy in {city_name}")
+        
+        # 敵の攻撃フェーズ
+        total_enemy_attack = sum(e.attack for e in enemies)
+        if players:
+            # 最も弱いプレイヤーから攻撃
+            target_player = min(players, key=lambda p: p.life)
+            damage = min(total_enemy_attack, target_player.life)
+            target_player.life -= damage
+            battle_log.append(f"Enemies dealt {damage} damage to player in {city_name}")
+        
+        return {
+            'city_name': city_name,
+            'log': battle_log,
+            'players_before': len(players),
+            'enemies_before': len(enemies)
+        }
+    
+    def remove_defeated_characters(self):
+        """lifeが0以下のキャラクターを削除"""
+        # プレイヤーから削除
+        original_player_count = len(self.players)
+        self.players = [p for p in self.players if p.life > 0]
+        players_defeated = original_player_count - len(self.players)
+        
+        # 敵から削除
+        original_enemy_count = len(self.enemies)
+        self.enemies = [e for e in self.enemies if e.life > 0]
+        enemies_defeated = original_enemy_count - len(self.enemies)
+        
+        if players_defeated > 0:
+            print(f"{players_defeated} player(s) were defeated!")
+        if enemies_defeated > 0:
+            print(f"{enemies_defeated} enemy(ies) were defeated!")
+    
+    def get_characters_in_city(self, city_name: str) -> tuple[List[Player], List[Enemy]]:
+        """指定した都市にいるキャラクターを取得"""
+        players_in_city = [p for p in self.players if p.current_city_name == city_name and not p.is_moving]
+        enemies_in_city = [e for e in self.enemies if e.current_city_name == city_name and not e.is_moving]
+        return players_in_city, enemies_in_city
+
     def auto_save(self):
         """自動セーブを実行"""
         self.save_to_file()

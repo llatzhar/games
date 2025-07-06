@@ -411,6 +411,9 @@ class MapScene(Scene):
 
     def switch_turn(self):
         """ターンを切り替える"""
+        # ターン終了時に戦闘をチェック・実行
+        battle_results = self.game_state.check_and_execute_battles()
+        
         if self.game_state.current_turn == "player":
             self.game_state.current_turn = "enemy"
             cutin_text = "ENEMY TURN"
@@ -428,6 +431,11 @@ class MapScene(Scene):
             self.game_state.ai_timer = 0  # AIタイマーをリセット
             # エネミーターンからプレイヤーターンに切り替わる際はカメラ追従をクリア
             self.clear_camera_follow()
+        
+        # 戦闘結果がある場合は戦闘情報も表示
+        if battle_results:
+            battle_info = f" - {len(battle_results)} battle(s) occurred!"
+            cutin_text += battle_info
         
         # カットインサブシーンを開始
         self.set_sub_scene(CutinSubScene(self, cutin_text))
@@ -666,6 +674,16 @@ class MapScene(Scene):
         self.camera_x = max(0, min(self.camera_x, self.map_pixel_width - screen_width))
         self.camera_y = max(0, min(self.camera_y, self.map_pixel_height - screen_height))
         
+        # ゲーム終了条件をチェック
+        if not self.game_state.players:
+            # 全プレイヤーが倒された場合
+            pyxel.text(screen_width // 2 - 30, screen_height // 2, "GAME OVER", 8)
+            pyxel.text(screen_width // 2 - 40, screen_height // 2 + 10, "Press Q to return to title", 7)
+        elif not self.game_state.enemies:
+            # 全敵が倒された場合
+            pyxel.text(screen_width // 2 - 20, screen_height // 2, "VICTORY!", 11)
+            pyxel.text(screen_width // 2 - 40, screen_height // 2 + 10, "Press Q to return to title", 7)
+        
         return self
 
 
@@ -787,6 +805,20 @@ class MapScene(Scene):
                     0   # 透明色（黒を透明にする）
                 )
                 
+                # ライフゲージを表示
+                life_bar_width = player.width
+                life_bar_height = 3
+                life_bar_x = int(player_screen_x - half_width)
+                life_bar_y = int(player_screen_y - half_height - 8)
+                
+                # ライフゲージの背景（赤色）
+                pyxel.rect(life_bar_x, life_bar_y, life_bar_width, life_bar_height, 8)
+                
+                # ライフゲージの現在値（緑色）
+                current_life_width = int((player.life / player.max_life) * life_bar_width)
+                if current_life_width > 0:
+                    pyxel.rect(life_bar_x, life_bar_y, current_life_width, life_bar_height, 11)
+                
                 # 選択されたプレイヤーに点滅する枠線を描画
                 if player == self.selected_player:
                     # 点滅効果（30フレームで1回点滅）
@@ -859,6 +891,21 @@ class MapScene(Scene):
                     enemy.height, # 高さ
                     0   # 透明色（黒を透明にする）
                 )
+                
+                # ライフゲージを表示
+                life_bar_width = enemy.width
+                life_bar_height = 3
+                life_bar_x = int(enemy_screen_x - half_width)
+                life_bar_y = int(enemy_screen_y - half_height - 8)
+                
+                # ライフゲージの背景（赤色）
+                pyxel.rect(life_bar_x, life_bar_y, life_bar_width, life_bar_height, 8)
+                
+                # ライフゲージの現在値（緑色）
+                current_life_width = int((enemy.life / enemy.max_life) * life_bar_width)
+                if current_life_width > 0:
+                    pyxel.rect(life_bar_x, life_bar_y, current_life_width, life_bar_height, 11)
+                
                   # AI種別インジケーターを表示（敵の上に小さな色付きの円）
                 indicator_x = int(enemy_screen_x)
                 indicator_y = int(enemy_screen_y - half_height - 6)
@@ -866,7 +913,7 @@ class MapScene(Scene):
                 if enemy.ai_type == "aggressive":
                     pyxel.circ(indicator_x, indicator_y, 2, 8)  # 赤色
                 elif enemy.ai_type == "patrol":
-                    pyxel.circ(indicator_x, indicator_y, 2, 11)  # ライトブルー
+                    pyxel.circ(indicator_x, indicator_y, 2, 11)  # ライトブルー  
                 elif enemy.ai_type == "defensive":
                     pyxel.circ(indicator_x, indicator_y, 2, 3)  # 緑色
                 else:  # random
@@ -925,59 +972,72 @@ class MapScene(Scene):
                 current_city_name = self.selected_player.current_city_name if self.selected_player.current_city_name else "None"
                 selected_text = f"Selected Player at {current_city_name}: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
                 pyxel.text(5, 55, selected_text, 11)
+                # プレイヤーの戦闘ステータスを表示
+                status_text = f"Life: {self.selected_player.life}/{self.selected_player.max_life}, Attack: {self.selected_player.attack}"
+                pyxel.text(5, 65, status_text, 11)
             elif self.game_state.current_turn == "enemy" and self.selected_enemy:
                 current_city_name = self.selected_enemy.current_city_name if self.selected_enemy.current_city_name else "None"
                 selected_text = f"Selected Enemy at {current_city_name}: ({int(self.selected_enemy.x)}, {int(self.selected_enemy.y)})"
                 pyxel.text(5, 55, selected_text, 8)
+                # 敵の戦闘ステータスを表示
+                status_text = f"Life: {self.selected_enemy.life}/{self.selected_enemy.max_life}, Attack: {self.selected_enemy.attack}"
+                pyxel.text(5, 65, status_text, 8)
             else:
                 pyxel.text(5, 55, "No character selected", 8)
             
             # カメラ位置を表示
             camera_text = f"Camera: ({int(self.camera_x)}, {int(self.camera_y)})"
-            pyxel.text(5, 65, camera_text, 10)
+            pyxel.text(5, 75, camera_text, 10)
             
             # カメラ追従情報を表示
             if self.camera_follow_target:
                 follow_info = f"Camera following: {self.camera_follow_target.ai_type if hasattr(self.camera_follow_target, 'ai_type') else 'Player'}"
-                pyxel.text(5, 75, follow_info, 13)
+                pyxel.text(5, 85, follow_info, 13)
             else:
-                pyxel.text(5, 75, "Camera: Manual control", 6)
+                pyxel.text(5, 85, "Camera: Manual control", 6)
             # Cities情報を表示
-            pyxel.text(5, 90, "Cities:", 14)
+            pyxel.text(5, 100, "Cities:", 14)
             for i, (city_name, city) in enumerate(self.game_state.cities.items()):
                 city_info = f"{city.name}: ({int(city.x)}, {int(city.y)})"
-                pyxel.text(5, 100 + i * 8, city_info, 12)
+                pyxel.text(5, 110 + i * 8, city_info, 12)
+            
+            # プレイヤーの情報を表示
+            pyxel.text(5, 140, "Players:", 14)
+            for i, player in enumerate(self.game_state.players):
+                player_city_name = player.current_city_name if player.current_city_name else "None"
+                player_info = f"Player {i+1} at {player_city_name}: Life {player.life}/{player.max_life}"
+                pyxel.text(5, 150 + i * 8, player_info, 11)
             
             # 敵の情報を表示
-            pyxel.text(5, 132, "Enemies:", 14)
+            pyxel.text(5, 158, "Enemies:", 14)
             for i, enemy in enumerate(self.game_state.enemies):
                 enemy_city_name = enemy.current_city_name if enemy.current_city_name else "None"
-                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {enemy_city_name}: ({int(enemy.x)}, {int(enemy.y)})"
-                pyxel.text(5, 142 + i * 8, enemy_info, 8)
+                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {enemy_city_name}: Life {enemy.life}/{enemy.max_life}"
+                pyxel.text(5, 168 + i * 8, enemy_info, 8)
               # AI凡例を表示
-            pyxel.text(5, 160, "AI Legend:", 14)
-            pyxel.circ(15, 168, 2, 8)   # 赤色
-            pyxel.text(20, 166, "Aggressive", 7)
-            pyxel.circ(80, 168, 2, 11)  # ライトブルー  
-            pyxel.text(85, 166, "Patrol", 7)
-            pyxel.circ(15, 176, 2, 3)   # 緑色
-            pyxel.text(20, 174, "Defensive", 7)
-            pyxel.circ(80, 176, 2, 14)  # ピンク
-            pyxel.text(85, 174, "Random", 7)
+            pyxel.text(5, 190, "AI Legend:", 14)
+            pyxel.circ(15, 198, 2, 8)   # 赤色
+            pyxel.text(20, 196, "Aggressive", 7)
+            pyxel.circ(80, 198, 2, 11)  # ライトブルー  
+            pyxel.text(85, 196, "Patrol", 7)
+            pyxel.circ(15, 206, 2, 3)   # 緑色
+            pyxel.text(20, 204, "Defensive", 7)
+            pyxel.circ(80, 206, 2, 14)  # ピンク
+            pyxel.text(85, 204, "Random", 7)
             
             # AI情報を表示（エネミーターン時）
             if self.game_state.current_turn == "enemy":
                 ai_info = f"AI Timer: {self.game_state.ai_timer}/{self.game_state.ai_decision_delay}"
-                pyxel.text(5, 186, ai_info, 8)
+                pyxel.text(5, 216, ai_info, 8)
             # マウスクリック座標を表示
             if self.click_timer > 0:
                 coord_text = f"Click: ({self.click_x}, {self.click_y})"
-                y_pos = 196 if self.game_state.current_turn == "enemy" else 186
+                y_pos = 226 if self.game_state.current_turn == "enemy" else 216
                 pyxel.text(5, y_pos, coord_text, 8)
                 
             # 現在のマウス座標も表示
             mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
-            y_pos = 206 if self.game_state.current_turn == "enemy" else 196
+            y_pos = 236 if self.game_state.current_turn == "enemy" else 226
             pyxel.text(5, y_pos, mouse_text, 10)
         else:
             # デバッグ情報非表示時は最小限の情報のみ
