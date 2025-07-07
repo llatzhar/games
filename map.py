@@ -489,6 +489,9 @@ class MapScene(Scene):
         self.pending_battle_results = []
         self.current_battle_index = 0
         
+        # 戦闘シーケンス完了後に倒されたキャラクターを削除
+        self.game_state.remove_defeated_characters()
+        
         # ターン切り替えのカットインを表示
         if self.game_state.current_turn == "player":
             cutin_text = "ENEMY TURN"
@@ -529,6 +532,9 @@ class MapScene(Scene):
         if battle_results:
             self.start_battle_sequence(battle_results)
         else:
+            # 戦闘がない場合でも倒されたキャラクターがいる可能性があるので削除処理を実行
+            self.game_state.remove_defeated_characters()
+            
             # 戦闘がない場合は通常のターン切り替えカットイン
             if self.game_state.current_turn == "player":
                 cutin_text = "PLAYER TURN"

@@ -304,7 +304,7 @@ class GameState:
             return False
     
     def check_and_execute_battles(self):
-        """各都市で戦闘をチェックし実行する"""
+        """各都市で戦闘をチェックし実行する（キャラクター削除は別途実行）"""
         battle_results = []
         
         for city_name, city in self.cities.items():
@@ -318,8 +318,8 @@ class GameState:
                 if battle_result:
                     battle_results.append(battle_result)
         
-        # 戦闘で倒されたキャラクターを削除
-        self.remove_defeated_characters()
+        # 戦闘で倒されたキャラクターの削除は戦闘シーン再生後に実行
+        # self.remove_defeated_characters()  # この行をコメントアウト
         
         return battle_results
     
