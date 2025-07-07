@@ -894,14 +894,14 @@ class MapScene(Scene):
             # プレイヤーが画面内にある場合のみ描画
             if (-player.width <= player_screen_x <= screen_width + player.width and
                 -player.height <= player_screen_y <= screen_height + player.height):
-                
-                # プレイヤーキャラクター（resources.pyxresのImage0左上16x16ビットマップ）
+                # プレイヤーキャラクター（resources.pyxresのImage0、image_indexに基づく段を使用）
                 half_width = player.width // 2
                 half_height = player.height // 2
                 
                 # アニメーションフレームを計算（2つのフレームを交互に表示）
                 anim_frame = (pyxel.frame_count // 10) % 2
                 src_x = anim_frame * 16  # 0または16
+                src_y = player.image_index * 16  # image_indexに基づいてY座標を計算
                 
                 # 向いている方向に応じて描画幅を調整（右向きの場合は負の値で反転）
                 draw_width = player.width if not player.facing_right else -player.width
@@ -911,10 +911,10 @@ class MapScene(Scene):
                     int(player_screen_y - half_height), 
                     0,  # Image Bank 0
                     src_x,  # ソース画像のX座標（0または16）
-                    0,  # ソース画像のY座標（左上）
+                    src_y,  # ソース画像のY座標（image_indexに基づく）
                     draw_width, # 幅（負の値で左右反転）
                     player.height, # 高さ
-                    0   # 透明色（黒を透明にする）
+                    2   # 透明色（紫色を透明にする）
                 )
                 
                 # ライフゲージを表示
@@ -980,15 +980,14 @@ class MapScene(Scene):
             # 敵が画面内にある場合のみ描画
             if (-enemy.width <= enemy_screen_x <= screen_width + enemy.width and
                 -enemy.height <= enemy_screen_y <= screen_height + enemy.height):
-                
-                # 敵キャラクター（resources.pyxresのImage0縦2段目16x16ビットマップ）
+                # 敵キャラクター（resources.pyxresのImage0、image_indexに基づく段を使用）
                 half_width = enemy.width // 2
                 half_height = enemy.height // 2
                 
                 # アニメーションフレームを計算（2つのフレームを交互に表示）
                 anim_frame = (pyxel.frame_count // 10) % 2
                 src_x = anim_frame * 16  # 0または16
-                src_y = 16  # 縦2段目
+                src_y = enemy.image_index * 16  # image_indexに基づいてY座標を計算
                 
                 # 向いている方向に応じて描画幅を調整（右向きの場合は負の値で反転）
                 draw_width = enemy.width if not enemy.facing_right else -enemy.width
@@ -998,10 +997,10 @@ class MapScene(Scene):
                     int(enemy_screen_y - half_height), 
                     0,  # Image Bank 0
                     src_x,  # ソース画像のX座標（0または16）
-                    src_y,  # ソース画像のY座標（縦2段目）
+                    src_y,  # ソース画像のY座標（image_indexに基づく）
                     draw_width, # 幅（負の値で左右反転）
                     enemy.height, # 高さ
-                    0   # 透明色（黒を透明にする）
+                    2   # 透明色（紫色を透明にする）
                 )
                 
                 # ライフゲージを表示

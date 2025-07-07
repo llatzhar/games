@@ -39,7 +39,7 @@ class Road:
         return cls(data['city1_name'], data['city2_name'])
 
 class Character:
-    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, speed: float = 1, life: int = 100, attack: int = 20):
+    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, speed: float = 1, life: int = 100, attack: int = 20, image_index: int = 0):
         self.x = x
         self.y = y
         self.width = 16  # char_width相当
@@ -51,7 +51,7 @@ class Character:
         self.is_moving = False
         self.facing_right = True
         self.current_city_name = current_city_name
-        
+        self.image_index = image_index  # 画像の段数（0=1段目、1=2段目、2=3段目）
         # 戦闘ステータス
         self.life = life  # 残兵力（0になると消滅）
         self.max_life = life  # 最大兵力
@@ -72,7 +72,8 @@ class Character:
             'current_city_name': self.current_city_name,
             'life': self.life,
             'max_life': self.max_life,
-            'attack': self.attack
+            'attack': self.attack,
+            'image_index': self.image_index
         }
     
     def update_from_dict(self, data: Dict[str, Any]):
@@ -91,10 +92,11 @@ class Character:
         self.life = data.get('life', 100)
         self.max_life = data.get('max_life', 100)
         self.attack = data.get('attack', 20)
+        self.image_index = data.get('image_index', 0)
 
 class Player(Character):
     def __init__(self, x: float, y: float, current_city_name: Optional[str] = None):
-        super().__init__(x, y, current_city_name, speed=2, life=120, attack=25)
+        super().__init__(x, y, current_city_name, speed=2, life=120, attack=25, image_index=0)  # 1段目を使用
     
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
@@ -108,8 +110,8 @@ class Player(Character):
         return player
 
 class Enemy(Character):
-    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, ai_type: str = "random"):
-        super().__init__(x, y, current_city_name, speed=1, life=80, attack=20)
+    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, ai_type: str = "random", image_index: int = 1):
+        super().__init__(x, y, current_city_name, speed=1, life=80, attack=20, image_index=image_index)  # 2段目以降を使用
         self.ai_type = ai_type
         self.patrol_city_names: List[str] = []
         self.patrol_index = 0
@@ -128,7 +130,8 @@ class Enemy(Character):
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Enemy':
-        enemy = cls(data['x'], data['y'], data.get('current_city_name'), data.get('ai_type', 'random'))
+        image_index = data.get('image_index', 1)  # デフォルトで2段目を使用
+        enemy = cls(data['x'], data['y'], data.get('current_city_name'), data.get('ai_type', 'random'), image_index)
         enemy.update_from_dict(data)
         enemy.patrol_city_names = data.get('patrol_city_names', [])
         enemy.patrol_index = data.get('patrol_index', 0)
@@ -187,10 +190,9 @@ class GameState:
             Player(self.cities["Town A"].x, self.cities["Town A"].y, "Town A"),
             Player(self.cities["Town C"].x, self.cities["Town C"].y, "Town C"),
         ]
-        
         # 敵を作成
-        enemy1 = Enemy(self.cities["Town E"].x, self.cities["Town E"].y, "Town E", "aggressive")
-        enemy2 = Enemy(self.cities["Town F"].x, self.cities["Town F"].y, "Town F", "patrol")
+        enemy1 = Enemy(self.cities["Town E"].x, self.cities["Town E"].y, "Town E", "aggressive", 1)  # 2段目を使用
+        enemy2 = Enemy(self.cities["Town F"].x, self.cities["Town F"].y, "Town F", "patrol", 2)     # 3段目を使用
         enemy2.patrol_city_names = ["Town F", "Town D", "Town B", "Town E"]
         
         self.enemies = [enemy1, enemy2]

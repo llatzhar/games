@@ -122,7 +122,7 @@ class GameScene(Scene):
         anim_frame = (pyxel.frame_count // 10) % 2
         sx = 0 if anim_frame == 0 else char_width
         # dir=1:そのまま, dir=-1:左右反転
-        pyxel.blt(self.x, self.y, 0, sx, 0, char_width * self.dir, char_height, 0)
+        pyxel.blt(self.x, self.y, 0, sx, 0, char_width * self.dir, char_height, 2)
         pyxel.text(40, 80, "Game Scene - Press Q to Quit", 7)
 
 class App:
