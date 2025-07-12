@@ -84,21 +84,32 @@ class HoverInfo:
             pyxel.text(text_x, text_y, line, self.text_color)
             text_y += self.line_height
     
-    def get_character_info(self, character):
-        """キャラクターの情報を取得（各クラスのget_hover_info()メソッドを使用）"""
-        return character.get_hover_info()
+    def get_character_info(self, character, game_state=None):
+        """キャラクターの情報を取得（都市表示名を考慮）"""
+        info_lines = character.get_hover_info()
+        
+        # 都市名を表示名に置き換える
+        if game_state and character.current_city_id:
+            display_name = game_state.get_city_display_name(character.current_city_id)
+            # "Location: " で始まる行を探して置き換え
+            for i, line in enumerate(info_lines):
+                if line.startswith("Location: "):
+                    info_lines[i] = f"Location: {display_name}"
+                    break
+        
+        return info_lines
     
     def get_city_info(self, city):
         """都市の情報を取得（Cityクラスのget_hover_info()メソッドを使用）"""
         return city.get_hover_info()
     
-    def draw_hover_info(self, mouse_x, mouse_y, hovered_character, hovered_city):
+    def draw_hover_info(self, mouse_x, mouse_y, hovered_character, hovered_city, game_state=None):
         """ホバー情報を描画（キャラクターを優先）"""
         info_lines = []
         
         if hovered_character:
             # キャラクターが優先
-            info_lines = self.get_character_info(hovered_character)
+            info_lines = self.get_character_info(hovered_character, game_state)
         elif hovered_city:
             # キャラクターがない場合は都市の情報
             info_lines = self.get_city_info(hovered_city)

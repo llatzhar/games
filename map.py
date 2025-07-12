@@ -125,12 +125,12 @@ class MapScene(Scene):
     def get_connected_cities(self, city):
         """指定したCityに接続されているCityのリストを取得"""
         if isinstance(city, City):
-            city_name = city.name
+            city_id = city.id
         else:
-            city_name = city
+            city_id = city
             
-        connected_names = self.game_state.get_connected_city_names(city_name)
-        return [self.game_state.get_city_by_name(name) for name in connected_names if self.game_state.get_city_by_name(name)]
+        connected_ids = self.game_state.get_connected_city_ids(city_id)
+        return [self.game_state.get_city_by_id(city_id) for city_id in connected_ids if self.game_state.get_city_by_id(city_id)]
     
     def get_distance_to_nearest_player(self, enemy_city):
         """指定したCityから最も近いプレイヤーまでの距離を計算"""
@@ -138,8 +138,8 @@ class MapScene(Scene):
         nearest_player = None
         
         for player in self.game_state.players:
-            if player.current_city_name:
-                player_city = self.game_state.get_city_by_name(player.current_city_name)
+            if player.current_city_id:
+                player_city = self.game_state.get_city_by_id(player.current_city_id)
                 if player_city:
                     dx = player_city.x - enemy_city.x
                     dy = player_city.y - enemy_city.y
@@ -155,41 +155,41 @@ class MapScene(Scene):
         if start_city == target_city:
             return []
         
-        # 都市名で処理
-        start_name = start_city.name if isinstance(start_city, City) else start_city
-        target_name = target_city.name if isinstance(target_city, City) else target_city
+        # 都市IDで処理
+        start_id = start_city.id if isinstance(start_city, City) else start_city
+        target_id = target_city.id if isinstance(target_city, City) else target_city
         
-        if start_name == target_name:
+        if start_id == target_id:
             return []
         
         # BFS for pathfinding
-        queue = [(start_name, [])]
-        visited = {start_name}
+        queue = [(start_id, [])]
+        visited = {start_id}
         
         while queue:
-            current_city_name, path = queue.pop(0)
+            current_city_id, path = queue.pop(0)
             
-            for connected_city_name in self.game_state.get_connected_city_names(current_city_name):
-                if connected_city_name == target_name:
+            for connected_city_id in self.game_state.get_connected_city_ids(current_city_id):
+                if connected_city_id == target_id:
                     result_cities = []
-                    for city_name in path + [connected_city_name]:
-                        city = self.game_state.get_city_by_name(city_name)
+                    for city_id in path + [connected_city_id]:
+                        city = self.game_state.get_city_by_id(city_id)
                         if city:
                             result_cities.append(city)
                     return result_cities
                 
-                if connected_city_name not in visited:
-                    visited.add(connected_city_name)
-                    queue.append((connected_city_name, path + [connected_city_name]))
+                if connected_city_id not in visited:
+                    visited.add(connected_city_id)
+                    queue.append((connected_city_id, path + [connected_city_id]))
         
         return []  # No path found
     
     def decide_enemy_action(self, enemy):
         """敵のAIに基づいて行動を決定"""
-        if not enemy.current_city_name:
+        if not enemy.current_city_id:
             return None
         
-        current_city = self.game_state.get_city_by_name(enemy.current_city_name)
+        current_city = self.game_state.get_city_by_id(enemy.current_city_id)
         if not current_city:
             return None
             
@@ -205,8 +205,8 @@ class MapScene(Scene):
             # プレイヤーに近づこうとする行動
             min_distance, nearest_player = self.get_distance_to_nearest_player(current_city)
             
-            if nearest_player and nearest_player.current_city_name:
-                nearest_player_city = self.game_state.get_city_by_name(nearest_player.current_city_name)
+            if nearest_player and nearest_player.current_city_id:
+                nearest_player_city = self.game_state.get_city_by_id(nearest_player.current_city_id)
                 if nearest_player_city:
                     # プレイヤーに向かうパスを検索
                     path = self.find_path_to_target(current_city, nearest_player_city)
@@ -221,8 +221,8 @@ class MapScene(Scene):
             # プレイヤーから遠ざかろうとする行動
             min_distance, nearest_player = self.get_distance_to_nearest_player(current_city)
             
-            if nearest_player and nearest_player.current_city_name:
-                nearest_player_city = self.game_state.get_city_by_name(nearest_player.current_city_name)
+            if nearest_player and nearest_player.current_city_id:
+                nearest_player_city = self.game_state.get_city_by_id(nearest_player.current_city_id)
                 if nearest_player_city:
                     best_city = None
                     max_distance = min_distance
@@ -245,11 +245,11 @@ class MapScene(Scene):
         
         elif enemy.ai_type == "patrol":
             # パトロールルートに沿って移動
-            if enemy.patrol_city_names and len(enemy.patrol_city_names) > 1:
+            if enemy.patrol_city_ids and len(enemy.patrol_city_ids) > 1:
                 # 次のパトロール地点を取得
-                next_index = (enemy.patrol_index + 1) % len(enemy.patrol_city_names)
-                target_city_name = enemy.patrol_city_names[next_index]
-                target_city = self.game_state.get_city_by_name(target_city_name)
+                next_index = (enemy.patrol_index + 1) % len(enemy.patrol_city_ids)
+                target_city_id = enemy.patrol_city_ids[next_index]
+                target_city = self.game_state.get_city_by_id(target_city_id)
                 
                 if target_city:
                     # 現在位置から次のパトロール地点への経路を検索
@@ -290,30 +290,32 @@ class MapScene(Scene):
         # AIに基づいて移動先を決定
         target_city = self.decide_enemy_action(selected_enemy)
         
-        if target_city and self.game_state.are_cities_connected(selected_enemy.current_city_name, target_city.name):
-            # 移動実行
-            selected_enemy.target_x = target_city.x
-            selected_enemy.target_y = target_city.y
-            selected_enemy.target_city_name = target_city.name
-            selected_enemy.is_moving = True
-            self.game_state.enemy_moved_this_turn = True
+        if target_city:
+            target_city_id = target_city.id
+            if self.game_state.are_cities_connected(selected_enemy.current_city_id, target_city_id):
+                # 移動実行
+                selected_enemy.target_x = target_city.x
+                selected_enemy.target_y = target_city.y
+                selected_enemy.target_city_id = target_city_id  # 内部IDを設定
+                selected_enemy.is_moving = True
+                self.game_state.enemy_moved_this_turn = True
             
             # パトロールAIの場合はインデックスを更新
-            if selected_enemy.ai_type == "patrol" and target_city.name in selected_enemy.patrol_city_names:
-                selected_enemy.patrol_index = selected_enemy.patrol_city_names.index(target_city.name)
+            if selected_enemy.ai_type == "patrol" and target_city_id in selected_enemy.patrol_city_ids:
+                selected_enemy.patrol_index = selected_enemy.patrol_city_ids.index(target_city_id)
         
         self.game_state.current_ai_enemy_index = None  # AI処理完了
 
     def get_character_positions_by_city(self):
         """各Cityにいるキャラクターを収集して辞書で返す"""
         character_positions = {}
-        for city_name, city in self.game_state.cities.items():
+        for city_id, city in self.game_state.cities.items():
             character_positions[city] = []
             for player in self.game_state.players:
-                if player.current_city_name == city_name:
+                if player.current_city_id == city_id:
                     character_positions[city].append(('player', player))
             for enemy in self.game_state.enemies:
-                if enemy.current_city_name == city_name:
+                if enemy.current_city_id == city_id:
                     character_positions[city].append(('enemy', enemy))
         return character_positions
 
@@ -328,9 +330,9 @@ class MapScene(Scene):
         
         for player in self.game_state.players:
             # キャラクターの描画位置を計算（重なり防止と同じロジック）
-            if player.current_city_name and not player.is_moving:
+            if player.current_city_id and not player.is_moving:
                 # 移動中でない場合のみオフセットを適用
-                current_city = self.game_state.get_city_by_name(player.current_city_name)
+                current_city = self.game_state.get_city_by_id(player.current_city_id)
                 if current_city and current_city in character_positions:
                     city_characters = character_positions[current_city]
                     char_index = next((idx for idx, (char_type, char) in enumerate(city_characters) 
@@ -373,15 +375,24 @@ class MapScene(Scene):
         
     def get_player_current_city(self, player):
         """プレイヤーが現在いるCityを取得"""
-        if player.current_city_name:
-            return self.game_state.get_city_by_name(player.current_city_name)
+        if player.current_city_id:
+            return self.game_state.get_city_by_id(player.current_city_id)
         return None
         
     def is_cities_connected(self, city1, city2):
         """2つのCity間がRoadで接続されているかチェック"""
-        city1_name = city1.name if isinstance(city1, City) else city1
-        city2_name = city2.name if isinstance(city2, City) else city2
-        return self.game_state.are_cities_connected(city1_name, city2_name)
+        # Cityオブジェクトから内部IDを取得
+        if isinstance(city1, City):
+            city1_id = city1.id
+        else:
+            city1_id = city1
+            
+        if isinstance(city2, City):
+            city2_id = city2.id
+        else:
+            city2_id = city2
+            
+        return self.game_state.are_cities_connected(city1_id, city2_id)
     
     def line_intersects_screen(self, x1, y1, x2, y2):
         """線分が画面と交差するかチェック"""
@@ -440,8 +451,8 @@ class MapScene(Scene):
             return
             
         current_battle = self.pending_battle_results[self.current_battle_index]
-        city_name = current_battle['city_name']
-        city = self.game_state.get_city_by_name(city_name)
+        city_id = current_battle['city_id']
+        city = self.game_state.get_city_by_id(city_id)
         
         if city:
             # 戦闘があった都市にカメラを移動
@@ -469,8 +480,8 @@ class MapScene(Scene):
     def start_current_battle_scene(self):
         """現在の戦闘のBattleSubSceneを開始"""
         current_battle = self.pending_battle_results[self.current_battle_index]
-        city_name = current_battle['city_name']
-        city = self.game_state.get_city_by_name(city_name)
+        city_id = current_battle['city_id']
+        city = self.game_state.get_city_by_id(city_id)
         
         if city:
             # BattleSubSceneを開始
@@ -566,9 +577,9 @@ class MapScene(Scene):
         
         for enemy in self.game_state.enemies:
             # キャラクターの描画位置を計算（重なり防止と同じロジック）
-            if enemy.current_city_name and not enemy.is_moving:
+            if enemy.current_city_id and not enemy.is_moving:
                 # 移動中でない場合のみオフセットを適用
-                current_city = self.game_state.get_city_by_name(enemy.current_city_name)
+                current_city = self.game_state.get_city_by_id(enemy.current_city_id)
                 if current_city and current_city in character_positions:
                     city_characters = character_positions[current_city]
                     char_index = next((idx for idx, (char_type, char) in enumerate(city_characters) 
@@ -669,9 +680,10 @@ class MapScene(Scene):
                     
                     if current_city and self.is_cities_connected(current_city, clicked_city):
                         # 接続されているCityにのみ移動可能
+                        clicked_city_id = clicked_city.id
                         self.selected_player.target_x = clicked_city.x
                         self.selected_player.target_y = clicked_city.y
-                        self.selected_player.target_city_name = clicked_city.name
+                        self.selected_player.target_city_id = clicked_city_id  # IDを設定
                         self.selected_player.is_moving = True
                         self.game_state.player_moved_this_turn = True
                         # プレイヤー移動時に自動セーブ
@@ -695,13 +707,14 @@ class MapScene(Scene):
                     self.set_camera_follow_target(clicked_enemy)
                 elif clicked_city and self.selected_enemy:
                     # 敵の現在位置のCityを取得
-                    current_city = self.game_state.get_city_by_name(self.selected_enemy.current_city_name) if self.selected_enemy.current_city_name else None
+                    current_city = self.game_state.get_city_by_id(self.selected_enemy.current_city_id) if self.selected_enemy.current_city_id else None
                     
                     if current_city and self.is_cities_connected(current_city, clicked_city):
                         # 接続されているCityにのみ移動可能
+                        clicked_city_id = clicked_city.id
                         self.selected_enemy.target_x = clicked_city.x
                         self.selected_enemy.target_y = clicked_city.y
-                        self.selected_enemy.target_city_name = clicked_city.name
+                        self.selected_enemy.target_city_id = clicked_city_id  # IDを設定
                         self.selected_enemy.is_moving = True
                         self.game_state.enemy_moved_this_turn = True
                         # 敵移動時に自動セーブ
@@ -733,11 +746,11 @@ class MapScene(Scene):
                     # 目標地点に到達
                     player.x = player.target_x
                     player.y = player.target_y
-                    player.current_city_name = player.target_city_name  # 現在位置Cityを更新
+                    player.current_city_id = player.target_city_id  # 現在位置Cityを更新
                     player.is_moving = False
                     player.target_x = None
                     player.target_y = None
-                    player.target_city_name = None
+                    player.target_city_id = None
                     # プレイヤーの移動完了時にターン切り替え
                     if self.game_state.current_turn == "player":
                         self.switch_turn()
@@ -762,11 +775,11 @@ class MapScene(Scene):
                     # 目標地点に到達
                     enemy.x = enemy.target_x
                     enemy.y = enemy.target_y
-                    enemy.current_city_name = enemy.target_city_name  # 現在位置Cityを更新
+                    enemy.current_city_id = enemy.target_city_id  # 現在位置Cityを更新
                     enemy.is_moving = False
                     enemy.target_x = None
                     enemy.target_y = None
-                    enemy.target_city_name = None
+                    enemy.target_city_id = None
                     # 敵の移動完了時にターン切り替え
                     if self.game_state.current_turn == "enemy":
                         self.switch_turn()
@@ -840,8 +853,8 @@ class MapScene(Scene):
         
         # 道路を描画（Cityよりも先に描画して背景に）
         for road in self.game_state.roads:
-            city1 = self.game_state.get_city_by_name(road.city1_name)
-            city2 = self.game_state.get_city_by_name(road.city2_name)
+            city1 = self.game_state.get_city_by_id(road.city1_id)
+            city2 = self.game_state.get_city_by_id(road.city2_id)
             
             if city1 and city2:
                 city1_screen_x = city1.x - self.camera_x
@@ -867,10 +880,11 @@ class MapScene(Scene):
                 pyxel.circb(city_screen_x, city_screen_y, half_size, 12)  # 青色の枠
                 pyxel.circ(city_screen_x, city_screen_y, half_size - 2, 1)  # 濃い青の内部
                 
-                # City名前を表示
-                text_x = city_screen_x - len(city.name) * 2
+                # City名前を表示（表示名を使用）
+                display_name = city.name  # 既に表示名が設定されている
+                text_x = city_screen_x - len(display_name) * 2
                 text_y = city_screen_y + half_size + 2
-                pyxel.text(text_x, text_y, city.name, 7)  # 白文字
+                pyxel.text(text_x, text_y, display_name, 7)  # 白文字
 
         # キャラクターの描画位置を計算（重なりを防ぐ）
         character_positions = self.get_character_positions_by_city()  # City毎にキャラクターのリストを管理
@@ -878,9 +892,9 @@ class MapScene(Scene):
         # プレイヤーを描画（カメラ位置を考慮、重なり防止）
         for i, player in enumerate(self.game_state.players):
             # キャラクターの描画位置を計算
-            if player.current_city_name and not player.is_moving:
+            if player.current_city_id and not player.is_moving:
                 # 移動中でない場合のみ同じCity内での位置調整を行う
-                current_city = self.game_state.get_city_by_name(player.current_city_name)
+                current_city = self.game_state.get_city_by_id(player.current_city_id)
                 if current_city and current_city in character_positions:
                     city_characters = character_positions[current_city]
                     char_index = next((idx for idx, (char_type, char) in enumerate(city_characters) 
@@ -964,9 +978,9 @@ class MapScene(Scene):
         # 敵キャラクターを描画（カメラ位置を考慮、重なり防止）
         for i, enemy in enumerate(self.game_state.enemies):
             # キャラクターの描画位置を計算
-            if enemy.current_city_name and not enemy.is_moving:
+            if enemy.current_city_id and not enemy.is_moving:
                 # 移動中でない場合のみ同じCity内での位置調整を行う
-                current_city = self.game_state.get_city_by_name(enemy.current_city_name)
+                current_city = self.game_state.get_city_by_id(enemy.current_city_id)
                 if current_city and current_city in character_positions:
                     city_characters = character_positions[current_city]
                     char_index = next((idx for idx, (char_type, char) in enumerate(city_characters) 
@@ -1080,7 +1094,7 @@ class MapScene(Scene):
             hovered_character = self.get_enemy_at_position(mouse_x, mouse_y)
         hovered_city = self.get_city_at_position(mouse_x, mouse_y)
         
-        self.hover_info.draw_hover_info(mouse_x, mouse_y, hovered_character, hovered_city)
+        self.hover_info.draw_hover_info(mouse_x, mouse_y, hovered_character, hovered_city, self.game_state)
         
         # デバッグ情報の表示（ページ切り替え対応）
         if self.debug_page > 0:
@@ -1115,8 +1129,13 @@ class MapScene(Scene):
             
             # 選択中のキャラクター情報を表示
             if self.game_state.current_turn == "player" and self.selected_player:
-                current_city_name = self.selected_player.current_city_name if self.selected_player.current_city_name else "None"
-                selected_text = f"Selected Player at {current_city_name}:"
+                current_city_id = self.selected_player.current_city_id if self.selected_player.current_city_id else None
+                # 都市の表示名を取得
+                if current_city_id is not None:
+                    display_name = self.game_state.get_city_display_name(current_city_id)
+                else:
+                    display_name = "None"
+                selected_text = f"Selected Player at {display_name}:"
                 pyxel.text(5, 65, selected_text, 11)
                 pos_text = f"  Position: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
                 pyxel.text(5, 75, pos_text, 11)
@@ -1124,8 +1143,13 @@ class MapScene(Scene):
                 status_text = f"  Life: {self.selected_player.life}/{self.selected_player.max_life}, Attack: {self.selected_player.attack}"
                 pyxel.text(5, 85, status_text, 11)
             elif self.game_state.current_turn == "enemy" and self.selected_enemy:
-                current_city_name = self.selected_enemy.current_city_name if self.selected_enemy.current_city_name else "None"
-                selected_text = f"Selected Enemy at {current_city_name}:"
+                current_city_id = self.selected_enemy.current_city_id if self.selected_enemy.current_city_id else None
+                # 都市の表示名を取得
+                if current_city_id is not None:
+                    display_name = self.game_state.get_city_display_name(current_city_id)
+                else:
+                    display_name = "None"
+                selected_text = f"Selected Enemy at {display_name}:"
                 pyxel.text(5, 65, selected_text, 8)
                 pos_text = f"  Position: ({int(self.selected_enemy.x)}, {int(self.selected_enemy.y)})"
                 pyxel.text(5, 75, pos_text, 8)
@@ -1156,7 +1180,9 @@ class MapScene(Scene):
             for city_name, city in self.game_state.cities.items():
                 if y_pos > screen_height - 10:  # 画面からはみ出さないように制限
                     break
-                city_info = f"{city.name}: ({int(city.x)}, {int(city.y)})"
+                # 表示名を使用
+                display_name = city.name
+                city_info = f"{display_name}: ({int(city.x)}, {int(city.y)})"
                 pyxel.text(5, y_pos, city_info, 12)
                 y_pos += 10
                 
@@ -1168,8 +1194,13 @@ class MapScene(Scene):
             pyxel.text(5, 25, "Players:", 14)
             y_pos = 35
             for i, player in enumerate(self.game_state.players):
-                player_city_name = player.current_city_name if player.current_city_name else "None"
-                player_info = f"Player {i+1} at {player_city_name}: Life {player.life}/{player.max_life}"
+                player_city_id = player.current_city_id if player.current_city_id else None
+                # 都市の表示名を取得
+                if player_city_id is not None:
+                    display_name = self.game_state.get_city_display_name(player_city_id)
+                else:
+                    display_name = "None"
+                player_info = f"Player {i+1} at {display_name}: Life {player.life}/{player.max_life}"
                 pyxel.text(5, y_pos, player_info, 11)
                 y_pos += 10
             
@@ -1178,8 +1209,13 @@ class MapScene(Scene):
             pyxel.text(5, y_pos, "Enemies:", 14)
             y_pos += 10
             for i, enemy in enumerate(self.game_state.enemies):
-                enemy_city_name = enemy.current_city_name if enemy.current_city_name else "None"
-                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {enemy_city_name}:"
+                enemy_city_id = enemy.current_city_id if enemy.current_city_id else None
+                # 都市の表示名を取得
+                if enemy_city_id is not None:
+                    display_name = self.game_state.get_city_display_name(enemy_city_id)
+                else:
+                    display_name = "None"
+                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {display_name}:"
                 pyxel.text(5, y_pos, enemy_info, 8)
                 y_pos += 10
                 life_info = f"  Life {enemy.life}/{enemy.max_life}"

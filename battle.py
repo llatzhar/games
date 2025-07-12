@@ -24,11 +24,11 @@ class BattleSubScene(SubScene):
         """戦闘に参加するキャラクターを取得"""
         # 戦闘が発生した都市にいるプレイヤーと敵を取得
         for player in self.parent_scene.game_state.players:
-            if player.current_city_name == self.city.name:
+            if player.current_city_id == self.city.id:
                 self.battle_players.append(player)
         
         for enemy in self.parent_scene.game_state.enemies:
-            if enemy.current_city_name == self.city.name:
+            if enemy.current_city_id == self.city.id:
                 self.battle_enemies.append(enemy)
         
     def parse_battle_log(self):

@@ -3,7 +3,8 @@ import os
 from typing import List, Dict, Any, Optional
 
 class City:
-    def __init__(self, name: str, x: float, y: float):
+    def __init__(self, id: int, name: str, x: float, y: float):
+        self.id = id  # 都市の一意なID
         self.name = name
         self.x = x
         self.y = y
@@ -19,6 +20,7 @@ class City:
     
     def to_dict(self) -> Dict[str, Any]:
         return {
+            'id': self.id,
             'name': self.name,
             'x': self.x,
             'y': self.y,
@@ -27,27 +29,27 @@ class City:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'City':
-        city = cls(data['name'], data['x'], data['y'])
+        city = cls(data['id'], data['name'], data['x'], data['y'])
         city.size = data.get('size', 20)
         return city
 
 class Road:
-    def __init__(self, city1_name: str, city2_name: str):
-        self.city1_name = city1_name
-        self.city2_name = city2_name
+    def __init__(self, city1_id: int, city2_id: int):
+        self.city1_id = city1_id
+        self.city2_id = city2_id
     
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'city1_name': self.city1_name,
-            'city2_name': self.city2_name
+            'city1_id': self.city1_id,
+            'city2_id': self.city2_id
         }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Road':
-        return cls(data['city1_name'], data['city2_name'])
+        return cls(data['city1_id'], data['city2_id'])
 
 class Character:
-    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, speed: float = 1, life: int = 100, attack: int = 20, image_index: int = 0):
+    def __init__(self, x: float, y: float, current_city_id: Optional[int] = None, speed: float = 1, life: int = 100, attack: int = 20, image_index: int = 0):
         self.x = x
         self.y = y
         self.width = 16  # char_width相当
@@ -55,10 +57,10 @@ class Character:
         self.speed = speed
         self.target_x: Optional[float] = None
         self.target_y: Optional[float] = None
-        self.target_city_name: Optional[str] = None
+        self.target_city_id: Optional[int] = None
         self.is_moving = False
         self.facing_right = True
-        self.current_city_name = current_city_name
+        self.current_city_id = current_city_id  # 都市IDに変更
         self.image_index = image_index  # 画像の段数（0=1段目、1=2段目、2=3段目）
         # 戦闘ステータス
         self.life = life  # 残兵力（0になると消滅）
@@ -68,7 +70,7 @@ class Character:
     def get_hover_info(self) -> List[str]:
         """ホバー時に表示する情報を取得（基底クラスの実装）"""
         info_lines = []
-        current_city = self.current_city_name if self.current_city_name else "None"
+        current_city = self.current_city_id if self.current_city_id else "None"
         info_lines.append(f"Location: {current_city}")
         info_lines.append(f"Life: {self.life}/{self.max_life}")
         info_lines.append(f"Attack: {self.attack}")
@@ -87,10 +89,10 @@ class Character:
             'speed': self.speed,
             'target_x': self.target_x,
             'target_y': self.target_y,
-            'target_city_name': self.target_city_name,
+            'target_city_id': self.target_city_id,
             'is_moving': self.is_moving,
             'facing_right': self.facing_right,
-            'current_city_name': self.current_city_name,
+            'current_city_id': self.current_city_id,
             'life': self.life,
             'max_life': self.max_life,
             'attack': self.attack,
@@ -106,18 +108,18 @@ class Character:
         self.speed = data['speed']
         self.target_x = data.get('target_x')
         self.target_y = data.get('target_y')
-        self.target_city_name = data.get('target_city_name')
+        self.target_city_id = data.get('target_city_id')
         self.is_moving = data.get('is_moving', False)
         self.facing_right = data.get('facing_right', True)
-        self.current_city_name = data.get('current_city_name')
+        self.current_city_id = data.get('current_city_id')
         self.life = data.get('life', 100)
         self.max_life = data.get('max_life', 100)
         self.attack = data.get('attack', 20)
         self.image_index = data.get('image_index', 0)
 
 class Player(Character):
-    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None):
-        super().__init__(x, y, current_city_name, speed=2, life=120, attack=25, image_index=0)  # 1段目を使用
+    def __init__(self, x: float, y: float, current_city_id: Optional[int] = None):
+        super().__init__(x, y, current_city_id, speed=2, life=120, attack=25, image_index=0)  # 1段目を使用
     
     def get_hover_info(self) -> List[str]:
         """プレイヤー用のホバー情報を取得"""
@@ -132,15 +134,15 @@ class Player(Character):
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Player':
-        player = cls(data['x'], data['y'], data.get('current_city_name'))
+        player = cls(data['x'], data['y'], data.get('current_city_id'))
         player.update_from_dict(data)
         return player
 
 class Enemy(Character):
-    def __init__(self, x: float, y: float, current_city_name: Optional[str] = None, ai_type: str = "random", image_index: int = 1):
-        super().__init__(x, y, current_city_name, speed=1, life=80, attack=20, image_index=image_index)  # 2段目以降を使用
+    def __init__(self, x: float, y: float, current_city_id: Optional[int] = None, ai_type: str = "random", image_index: int = 1):
+        super().__init__(x, y, current_city_id, speed=1, life=80, attack=20, image_index=image_index)  # 2段目以降を使用
         self.ai_type = ai_type
-        self.patrol_city_names: List[str] = []
+        self.patrol_city_ids: List[int] = []  # 都市IDのリストに変更
         self.patrol_index = 0
         self.last_player_position: Optional[Dict[str, float]] = None
     
@@ -166,7 +168,7 @@ class Enemy(Character):
         data.update({
             'type': 'enemy',
             'ai_type': self.ai_type,
-            'patrol_city_names': self.patrol_city_names,
+            'patrol_city_ids': self.patrol_city_ids,
             'patrol_index': self.patrol_index,
             'last_player_position': self.last_player_position
         })
@@ -175,16 +177,16 @@ class Enemy(Character):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Enemy':
         image_index = data.get('image_index', 1)  # デフォルトで2段目を使用
-        enemy = cls(data['x'], data['y'], data.get('current_city_name'), data.get('ai_type', 'random'), image_index)
+        enemy = cls(data['x'], data['y'], data.get('current_city_id'), data.get('ai_type', 'random'), image_index)
         enemy.update_from_dict(data)
-        enemy.patrol_city_names = data.get('patrol_city_names', [])
+        enemy.patrol_city_ids = data.get('patrol_city_ids', [])
         enemy.patrol_index = data.get('patrol_index', 0)
         enemy.last_player_position = data.get('last_player_position')
         return enemy
 
 class GameState:
     def __init__(self):
-        self.cities: Dict[str, City] = {}
+        self.cities: Dict[int, City] = {}  # 整数IDをキーに変更
         self.roads: List[Road] = []
         self.players: List[Player] = []
         self.enemies: List[Enemy] = []
@@ -206,60 +208,65 @@ class GameState:
         """デフォルトのゲーム状態を初期化"""
         tile_size = 16
         
-        # 都市を作成
+        # 都市を作成（整数IDを使用）
         self.cities = {
-            "Town A": City("Town A", 2 * tile_size, 2 * tile_size),
-            "Town B": City("Town B", 7 * tile_size, 2 * tile_size),
-            "Town C": City("Town C", 2 * tile_size, 6 * tile_size),
-            "Town D": City("Town D", 7 * tile_size, 6 * tile_size),
-            "Town E": City("Town E", 12 * tile_size, 2 * tile_size),
-            "Town F": City("Town F", 12 * tile_size, 6 * tile_size),
+            1: City(1, "Kiyosu", 2 * tile_size, 2 * tile_size),
+            2: City(2, "Nagoya", 7 * tile_size, 2 * tile_size),
+            3: City(3, "Sakai", 2 * tile_size, 6 * tile_size),
+            4: City(4, "Yamato", 7 * tile_size, 6 * tile_size),
+            5: City(5, "Tutujigaoka", 12 * tile_size, 2 * tile_size),
+            6: City(6, "Iwabuti", 12 * tile_size, 6 * tile_size),
         }
         
-        # 道路を作成
+        # 道路を作成（都市IDを使用）
         self.roads = [
-            Road("Town A", "Town B"),
-            Road("Town B", "Town E"),
-            Road("Town A", "Town C"),
-            Road("Town C", "Town D"),
-            Road("Town D", "Town F"),
-            Road("Town B", "Town D"),
-            Road("Town E", "Town F"),
-            Road("Town A", "Town D"),
-            Road("Town B", "Town F"),
+            Road(1, 2),  # Kiyosu - Nagoya
+            Road(2, 5),  # Nagoya - Tutujigaoka
+            Road(1, 3),  # Kiyosu - Sakai
+            Road(3, 4),  # Sakai - Yamato
+            Road(4, 6),  # Yamato - Iwabuti
+            Road(2, 4),  # Nagoya - Yamato
+            Road(5, 6),  # Tutujigaoka - Iwabuti
+            Road(1, 4),  # Kiyosu - Yamato
+            Road(2, 6),  # Nagoya - Iwabuti
         ]
         
         # プレイヤーを作成
         self.players = [
-            Player(self.cities["Town A"].x, self.cities["Town A"].y, "Town A"),
-            Player(self.cities["Town C"].x, self.cities["Town C"].y, "Town C"),
+            Player(self.cities[1].x, self.cities[1].y, 1),  # Kiyosu
+            Player(self.cities[3].x, self.cities[3].y, 3),  # Sakai
         ]
         # 敵を作成
-        enemy1 = Enemy(self.cities["Town E"].x, self.cities["Town E"].y, "Town E", "aggressive", 1)  # 2段目を使用
-        enemy2 = Enemy(self.cities["Town F"].x, self.cities["Town F"].y, "Town F", "patrol", 2)     # 3段目を使用
-        enemy2.patrol_city_names = ["Town F", "Town D", "Town B", "Town E"]
+        enemy1 = Enemy(self.cities[5].x, self.cities[5].y, 5, "aggressive", 1)  # Tutujigaoka
+        enemy2 = Enemy(self.cities[6].x, self.cities[6].y, 6, "patrol", 2)     # Iwabuti
+        enemy2.patrol_city_ids = [6, 4, 2, 5]  # Iwabuti - Yamato - Nagoya - Tutujigaoka
         
         self.enemies = [enemy1, enemy2]
     
-    def get_city_by_name(self, name: str) -> Optional[City]:
-        """名前で都市を取得"""
-        return self.cities.get(name)
+    def get_city_by_id(self, city_id: int) -> Optional[City]:
+        """IDで都市を取得"""
+        return self.cities.get(city_id)
     
-    def get_connected_city_names(self, city_name: str) -> List[str]:
-        """指定した都市に接続されている都市名のリストを取得"""
+    def get_city_display_name(self, city_id: int) -> str:
+        """都市IDから表示名を取得"""
+        city = self.cities.get(city_id)
+        return city.name if city else str(city_id)
+    
+    def get_connected_city_ids(self, city_id: int) -> List[int]:
+        """指定した都市に接続されている都市IDのリストを取得"""
         connected = []
         for road in self.roads:
-            if road.city1_name == city_name:
-                connected.append(road.city2_name)
-            elif road.city2_name == city_name:
-                connected.append(road.city1_name)
+            if road.city1_id == city_id:
+                connected.append(road.city2_id)
+            elif road.city2_id == city_id:
+                connected.append(road.city1_id)
         return connected
     
-    def are_cities_connected(self, city1_name: str, city2_name: str) -> bool:
+    def are_cities_connected(self, city1_id: int, city2_id: int) -> bool:
         """2つの都市が道路で接続されているかチェック"""
         for road in self.roads:
-            if (road.city1_name == city1_name and road.city2_name == city2_name) or \
-               (road.city1_name == city2_name and road.city2_name == city1_name):
+            if (road.city1_id == city1_id and road.city2_id == city2_id) or \
+               (road.city1_id == city2_id and road.city2_id == city1_id):
                 return True
         return False
     
@@ -285,7 +292,7 @@ class GameState:
     def to_dict(self) -> Dict[str, Any]:
         """ゲーム状態を辞書に変換"""
         return {
-            'cities': {name: city.to_dict() for name, city in self.cities.items()},
+            'cities': {str(city_id): city.to_dict() for city_id, city in self.cities.items()},
             'roads': [road.to_dict() for road in self.roads],
             'players': [player.to_dict() for player in self.players],
             'enemies': [enemy.to_dict() for enemy in self.enemies],
@@ -301,8 +308,8 @@ class GameState:
     def from_dict(self, data: Dict[str, Any]):
         """辞書からゲーム状態を復元"""
         # 都市を復元
-        self.cities = {name: City.from_dict(city_data) 
-                      for name, city_data in data['cities'].items()}
+        self.cities = {int(city_id): City.from_dict(city_data) 
+                      for city_id, city_data in data['cities'].items()}
         
         # 道路を復元
         self.roads = [Road.from_dict(road_data) for road_data in data['roads']]
@@ -351,14 +358,14 @@ class GameState:
         """各都市で戦闘をチェックし実行する（キャラクター削除は別途実行）"""
         battle_results = []
         
-        for city_name, city in self.cities.items():
+        for city_id, city in self.cities.items():
             # この都市にいるプレイヤーと敵を取得
-            players_in_city = [p for p in self.players if p.current_city_name == city_name and not p.is_moving]
-            enemies_in_city = [e for e in self.enemies if e.current_city_name == city_name and not e.is_moving]
+            players_in_city = [p for p in self.players if p.current_city_id == city_id and not p.is_moving]
+            enemies_in_city = [e for e in self.enemies if e.current_city_id == city_id and not e.is_moving]
             
             # プレイヤーと敵の両方がいる場合は戦闘
             if players_in_city and enemies_in_city:
-                battle_result = self.execute_battle(city_name, players_in_city, enemies_in_city)
+                battle_result = self.execute_battle(city_id, players_in_city, enemies_in_city)
                 if battle_result:
                     battle_results.append(battle_result)
         
@@ -367,9 +374,10 @@ class GameState:
         
         return battle_results
     
-    def execute_battle(self, city_name: str, players: List[Player], enemies: List[Enemy]) -> Dict[str, Any]:
+    def execute_battle(self, city_id: int, players: List[Player], enemies: List[Enemy]) -> Dict[str, Any]:
         """指定した都市での戦闘を実行"""
         battle_log = []
+        city_name = self.get_city_display_name(city_id)
         
         # プレイヤーの攻撃フェーズ
         total_player_attack = sum(p.attack for p in players)
@@ -390,7 +398,7 @@ class GameState:
             battle_log.append(f"Enemies dealt {damage} damage to player in {city_name}")
         
         return {
-            'city_name': city_name,
+            'city_id': city_id,
             'log': battle_log,
             'players_before': len(players),
             'enemies_before': len(enemies)
@@ -413,10 +421,10 @@ class GameState:
         if enemies_defeated > 0:
             print(f"{enemies_defeated} enemy(ies) were defeated!")
     
-    def get_characters_in_city(self, city_name: str) -> tuple[List[Player], List[Enemy]]:
+    def get_characters_in_city(self, city_id: int) -> tuple[List[Player], List[Enemy]]:
         """指定した都市にいるキャラクターを取得"""
-        players_in_city = [p for p in self.players if p.current_city_name == city_name and not p.is_moving]
-        enemies_in_city = [e for e in self.enemies if e.current_city_name == city_name and not e.is_moving]
+        players_in_city = [p for p in self.players if p.current_city_id == city_id and not p.is_moving]
+        enemies_in_city = [e for e in self.enemies if e.current_city_id == city_id and not e.is_moving]
         return players_in_city, enemies_in_city
 
     def auto_save(self):
