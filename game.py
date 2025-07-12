@@ -2,8 +2,8 @@ import pyxel
 
 fps = 30  # FPSを30で定義
 pyxres_file = "resources.pyxres"  # pyxresファイル名を変数で定義
-screen_width = 160  # スクリーン幅
-screen_height = 120  # スクリーン高さ
+screen_width = 320  # スクリーン幅
+screen_height = 240  # スクリーン高さ
 char_width = 16  # キャラクター幅
 char_height = 16  # キャラクター高さ
 

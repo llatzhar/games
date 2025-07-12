@@ -7,6 +7,7 @@ from game import screen_width, screen_height, char_width, char_height, Scene, Su
 from game_state import GameState, City, Road, Player, Enemy
 from cutin import CutinSubScene
 from battle import BattleSubScene
+from hover_info import HoverInfo
 
 class MapScene(Scene):
     def __init__(self):
@@ -59,6 +60,9 @@ class MapScene(Scene):
         # マップ全体のピクセルサイズ
         self.map_pixel_width = self.map_width * self.tile_size
         self.map_pixel_height = self.map_height * self.tile_size
+        
+        # ホバー情報表示
+        self.hover_info = HoverInfo()
 
     def generate_30x30_map(self):
         """30x30のマップを生成"""
@@ -1068,6 +1072,16 @@ class MapScene(Scene):
                         pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
                         pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
         # UI表示
+        # ホバー情報の表示（最優先で表示）
+        mouse_x = pyxel.mouse_x
+        mouse_y = pyxel.mouse_y
+        hovered_character = self.get_player_at_position(mouse_x, mouse_y)
+        if not hovered_character:
+            hovered_character = self.get_enemy_at_position(mouse_x, mouse_y)
+        hovered_city = self.get_city_at_position(mouse_x, mouse_y)
+        
+        self.hover_info.draw_hover_info(mouse_x, mouse_y, hovered_character, hovered_city)
+        
         # デバッグ情報の表示（ページ切り替え対応）
         if self.debug_page > 0:
             self.draw_debug_page(self.debug_page)
