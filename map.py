@@ -431,12 +431,12 @@ class MapScene(Scene):
         return ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and \
                ccw(x1, y1, x2, y2, x3, y3) != ccw(x1, y1, x2, y2, x4, y4)
 
-    def start_battle_sequence(self, battle_results):
+    def start_battle_sequence(self, battle_locations):
         """戦闘シーケンスを開始"""
-        if not battle_results:
+        if not battle_locations:
             return
             
-        self.pending_battle_results = battle_results
+        self.pending_battle_results = battle_locations
         self.current_battle_index = 0
         self.is_processing_battles = True
         
@@ -524,8 +524,8 @@ class MapScene(Scene):
 
     def switch_turn(self):
         """ターンを切り替える"""
-        # ターン終了時に戦闘をチェック・実行
-        battle_results = self.game_state.check_and_execute_battles()
+        # ターン終了時に戦闘をチェック（実際の戦闘は実行しない）
+        battle_locations = self.game_state.check_battles()
         
         # ターン状態を更新
         if self.game_state.current_turn == "player":
@@ -544,13 +544,10 @@ class MapScene(Scene):
             # エネミーターンからプレイヤーターンに切り替わる際はカメラ追従をクリア
             self.clear_camera_follow()
         
-        # 戦闘結果がある場合は戦闘シーケンスを開始
-        if battle_results:
-            self.start_battle_sequence(battle_results)
+        # 戦闘がある場合は戦闘シーケンスを開始
+        if battle_locations:
+            self.start_battle_sequence(battle_locations)
         else:
-            # 戦闘がない場合でも倒されたキャラクターがいる可能性があるので削除処理を実行
-            self.game_state.remove_defeated_characters()
-            
             # 戦闘がない場合は通常のターン切り替えカットイン
             if self.game_state.current_turn == "player":
                 cutin_text = "PLAYER TURN"

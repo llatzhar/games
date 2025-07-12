@@ -2,9 +2,9 @@ import pyxel
 from game import SubScene
 
 class BattleSubScene(SubScene):
-    def __init__(self, parent_scene, battle_result, city):
+    def __init__(self, parent_scene, battle_info, city):
         super().__init__(parent_scene)
-        self.battle_result = battle_result
+        self.battle_info = battle_info  # 戦闘場所情報（まだ戦闘は実行されていない）
         self.city = city
         self.animation_timer = 0
         self.max_animation_time = 240  # 8秒間（30fps * 8秒）
@@ -12,24 +12,49 @@ class BattleSubScene(SubScene):
         self.phase_timer = 0
         self.damage_numbers = []  # ダメージ表示用
         
-        # 戦闘に参加するキャラクターを取得
-        self.battle_players = []
-        self.battle_enemies = []
-        self.get_battle_characters()
+        # 戦闘に参加するキャラクター（戦闘開始時の状態をキャプチャ）
+        self.battle_players = battle_info['players']
+        self.battle_enemies = battle_info['enemies']
+        
+        # 戦闘開始時のライフを記録（戦闘前の状態を保存）
+        self.initial_player_lives = [p.life for p in self.battle_players]
+        self.initial_enemy_lives = [e.life for e in self.battle_enemies]
+        
+        # 戦闘計算を実行（ここで初めて実際の戦闘を行う）
+        self.battle_result = self.execute_battle()
         
         # 戦闘ログから情報を抽出
         self.parse_battle_log()
         
-    def get_battle_characters(self):
-        """戦闘に参加するキャラクターを取得"""
-        # 戦闘が発生した都市にいるプレイヤーと敵を取得
-        for player in self.parent_scene.game_state.players:
-            if player.current_city_id == self.city.id:
-                self.battle_players.append(player)
+    def execute_battle(self):
+        """戦闘を実行して結果を返す"""
+        battle_log = []
+        city_name = self.city.name
         
-        for enemy in self.parent_scene.game_state.enemies:
-            if enemy.current_city_id == self.city.id:
-                self.battle_enemies.append(enemy)
+        # プレイヤーの攻撃フェーズ
+        total_player_attack = sum(p.attack for p in self.battle_players)
+        if self.battle_enemies:
+            # 最も弱い敵から攻撃
+            target_enemy = min(self.battle_enemies, key=lambda e: e.life)
+            damage = min(total_player_attack, target_enemy.life)
+            target_enemy.life -= damage
+            battle_log.append(f"Players dealt {damage} damage to {target_enemy.ai_type} enemy in {city_name}")
+        
+        # 敵の攻撃フェーズ
+        total_enemy_attack = sum(e.attack for e in self.battle_enemies)
+        if self.battle_players:
+            # 最も弱いプレイヤーから攻撃
+            target_player = min(self.battle_players, key=lambda p: p.life)
+            damage = min(total_enemy_attack, target_player.life)
+            target_player.life -= damage
+            battle_log.append(f"Enemies dealt {damage} damage to player in {city_name}")
+        
+        return {
+            'city_id': self.city.id,
+            'log': battle_log,
+            'players_before': len(self.battle_players),
+            'enemies_before': len(self.battle_enemies)
+        }
         
     def parse_battle_log(self):
         """戦闘ログから表示用の情報を抽出"""
@@ -209,14 +234,15 @@ class BattleSubScene(SubScene):
             
             # プレイヤーが画面内に収まるかチェック
             if draw_y + player.height < pyxel.height - 20:
-                self.draw_character(player, draw_x, draw_y, True)  # 右向き
+                self.draw_character(player, draw_x, draw_y, True, self.initial_player_lives[i], "player")  # 右向き
                 
                 # プレイヤー名を表示
                 name_text = f"Player {i+1}"
                 pyxel.text(draw_x - len(name_text) * 2, draw_y - 25, name_text, 11)
                 
-                # ライフ表示
-                life_text = f"HP: {player.life}/{player.max_life}"
+                # ライフ表示（戦闘の進行に応じて変化）
+                displayed_life = self.get_displayed_life(player, self.initial_player_lives[i], "player")
+                life_text = f"HP: {displayed_life}/{player.max_life}"
                 pyxel.text(draw_x - len(life_text) * 2, draw_y - 15, life_text, 7)
         
         # 敵キャラクターを右側に描画
@@ -230,7 +256,7 @@ class BattleSubScene(SubScene):
             
             # 敵が画面内に収まるかチェック
             if draw_y + enemy.height < pyxel.height - 20:
-                self.draw_character(enemy, draw_x, draw_y, False)  # 左向き
+                self.draw_character(enemy, draw_x, draw_y, False, self.initial_enemy_lives[i], "enemy")  # 左向き
                 
                 # 敵名を表示
                 name_text = f"Enemy {i+1}"
@@ -241,10 +267,12 @@ class BattleSubScene(SubScene):
                 pyxel.text(draw_x + 20, draw_y - 15, ai_text, 6)
                 
                 # ライフ表示
-                life_text = f"HP: {enemy.life}/{enemy.max_life}"
+                # ライフ表示（戦闘の進行に応じて変化）
+                displayed_life = self.get_displayed_life(enemy, self.initial_enemy_lives[i], "enemy")
+                life_text = f"HP: {displayed_life}/{enemy.max_life}"
                 pyxel.text(draw_x + 20, draw_y - 5, life_text, 7)
     
-    def draw_character(self, character, x, y, facing_right):
+    def draw_character(self, character, x, y, facing_right, initial_life, character_type):
         """キャラクターを指定位置に描画"""
         half_width = character.width // 2
         half_height = character.height // 2
@@ -276,7 +304,7 @@ class BattleSubScene(SubScene):
             2   # 透明色
         )
         
-        # ライフゲージを描画
+        # ライフゲージを描画（戦闘進行に応じた値を使用）
         life_bar_width = character.width
         life_bar_height = 3
         life_bar_x = int(x - half_width)
@@ -285,8 +313,11 @@ class BattleSubScene(SubScene):
         # ライフゲージの背景（赤色）
         pyxel.rect(life_bar_x, life_bar_y, life_bar_width, life_bar_height, 8)
         
+        # 戦闘進行に応じた表示ライフ値を取得
+        displayed_life = self.get_displayed_life(character, initial_life, character_type)
+        
         # ライフゲージの現在値（緑色）
-        current_life_width = int((character.life / character.max_life) * life_bar_width)
+        current_life_width = int((displayed_life / character.max_life) * life_bar_width)
         if current_life_width > 0:
             pyxel.rect(life_bar_x, life_bar_y, current_life_width, life_bar_height, 11)
     
@@ -305,3 +336,28 @@ class BattleSubScene(SubScene):
                 flash_intensity = max(0, 30 - self.phase_timer)
                 if flash_intensity > 15:
                     pyxel.rect(0, 0, pyxel.width, pyxel.height, 8)
+    
+    def get_displayed_life(self, character, initial_life, character_type):
+        """戦闘の進行に応じて表示するライフ値を計算"""
+        if self.phase == "intro":
+            # 戦闘開始前のライフを表示
+            return initial_life
+        elif self.phase == "player_attack" and character_type == "enemy":
+            # プレイヤー攻撃フェーズ中の敵のライフは徐々に減る
+            if self.phase_timer < 60:  # 2秒間で減少
+                progress = self.phase_timer / 60
+                damage_taken = initial_life - character.life
+                return int(initial_life - damage_taken * progress)
+            else:
+                return character.life
+        elif self.phase == "enemy_attack" and character_type == "player":
+            # 敵攻撃フェーズ中のプレイヤーのライフは徐々に減る
+            if self.phase_timer < 60:  # 2秒間で減少
+                progress = self.phase_timer / 60
+                damage_taken = initial_life - character.life
+                return int(initial_life - damage_taken * progress)
+            else:
+                return character.life
+        else:
+            # その他の場合は現在のライフを表示
+            return character.life

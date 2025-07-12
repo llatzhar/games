@@ -354,6 +354,28 @@ class GameState:
             print(f"Failed to load game state: {e}")
             return False
     
+    def check_battles(self):
+        """各都市で戦闘をチェックし、戦闘が発生する都市の情報を返す（実際の戦闘は実行しない）"""
+        battle_locations = []
+        
+        for city_id, city in self.cities.items():
+            # この都市にいるプレイヤーと敵を取得
+            players_in_city = [p for p in self.players if p.current_city_id == city_id and not p.is_moving]
+            enemies_in_city = [e for e in self.enemies if e.current_city_id == city_id and not e.is_moving]
+            
+            # プレイヤーと敵の両方がいる場合は戦闘
+            if players_in_city and enemies_in_city:
+                battle_info = {
+                    'city_id': city_id,
+                    'players': players_in_city.copy(),  # コピーして元のリストを保護
+                    'enemies': enemies_in_city.copy(),
+                    'players_before': len(players_in_city),
+                    'enemies_before': len(enemies_in_city)
+                }
+                battle_locations.append(battle_info)
+        
+        return battle_locations
+
     def check_and_execute_battles(self):
         """各都市で戦闘をチェックし実行する（キャラクター削除は別途実行）"""
         battle_results = []
