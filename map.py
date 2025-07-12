@@ -15,7 +15,8 @@ class MapScene(Scene):
         self.click_y = -1  # クリック位置のY座標
         self.click_timer = 0  # クリック座標表示時間
         self.selected_player = None  # 選択中のプレイヤー
-        self.show_debug_info = True  # デバッグ情報表示フラグ
+        self.debug_page = 0  # デバッグ情報のページ番号 (0=非表示, 1〜3=ページ)
+        self.max_debug_page = 3  # デバッグページの最大数
         
         # ゲーム状態を初期化
         self.game_state = GameState()
@@ -623,9 +624,9 @@ class MapScene(Scene):
             else:
                 self.selected_enemy = None
             
-        # Vキーでデバッグ情報の表示切り替え
+        # Vキーでデバッグ情報のページ切り替え
         if pyxel.btnp(pyxel.KEY_V):
-            self.show_debug_info = not self.show_debug_info
+            self.debug_page = (self.debug_page + 1) % (self.max_debug_page + 1)
             
         # Spaceキーでターンスキップ
         if pyxel.btnp(pyxel.KEY_SPACE):
@@ -1067,107 +1068,145 @@ class MapScene(Scene):
                         pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
                         pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
         # UI表示
-        if self.show_debug_info:
-            pyxel.text(5, 5, "Map Scene (30x30) - Press Q to Title", 7)
+        # デバッグ情報の表示（ページ切り替え対応）
+        if self.debug_page > 0:
+            self.draw_debug_page(self.debug_page)
+        else:
+            # デバッグ情報非表示時は最小限の情報のみ
+            pyxel.text(5, 5, "Press V for debug info", 8)
+    
+    def draw_debug_page(self, page):
+        """デバッグ情報のページを描画"""
+        # ページ番号表示
+        page_text = f"Debug Page {page}/{self.max_debug_page} (V to switch)"
+        pyxel.text(5, 5, page_text, 7)
+        
+        if page == 1:
+            # ページ1: 基本操作とターン情報
+            pyxel.text(5, 15, "Map Scene (30x30) - Press Q to Title", 7)
             if self.game_state.current_turn == "enemy" and self.camera_follow_target:
-                pyxel.text(5, 15, "Camera following enemy - Manual control disabled", 6)
+                pyxel.text(5, 25, "Camera following enemy - Manual control disabled", 6)
             else:
-                pyxel.text(5, 15, "WASD: Move Camera, ESC: Deselect, V: Debug", 7)
-            pyxel.text(5, 25, "Click: Select character, Click connected City", 7)
+                pyxel.text(5, 25, "WASD: Move Camera, ESC: Deselect", 7)
+            pyxel.text(5, 35, "Click: Select character, Click connected City", 7)
             
             # ターン情報を表示
             turn_text = f"Turn {self.game_state.turn_counter}: {self.game_state.current_turn.upper()} TURN"
             turn_color = 11 if self.game_state.current_turn == "player" else 8
-            pyxel.text(5, 35, turn_text, turn_color)
+            pyxel.text(5, 45, turn_text, turn_color)
             
             can_move = "YES" if self.can_move_this_turn() else "NO"
             move_text = f"Can move this turn: {can_move}"
-            pyxel.text(5, 45, move_text, 10)
+            pyxel.text(5, 55, move_text, 10)
             
             # 選択中のキャラクター情報を表示
             if self.game_state.current_turn == "player" and self.selected_player:
                 current_city_name = self.selected_player.current_city_name if self.selected_player.current_city_name else "None"
-                selected_text = f"Selected Player at {current_city_name}: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
-                pyxel.text(5, 55, selected_text, 11)
+                selected_text = f"Selected Player at {current_city_name}:"
+                pyxel.text(5, 65, selected_text, 11)
+                pos_text = f"  Position: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
+                pyxel.text(5, 75, pos_text, 11)
                 # プレイヤーの戦闘ステータスを表示
-                status_text = f"Life: {self.selected_player.life}/{self.selected_player.max_life}, Attack: {self.selected_player.attack}"
-                pyxel.text(5, 65, status_text, 11)
+                status_text = f"  Life: {self.selected_player.life}/{self.selected_player.max_life}, Attack: {self.selected_player.attack}"
+                pyxel.text(5, 85, status_text, 11)
             elif self.game_state.current_turn == "enemy" and self.selected_enemy:
                 current_city_name = self.selected_enemy.current_city_name if self.selected_enemy.current_city_name else "None"
-                selected_text = f"Selected Enemy at {current_city_name}: ({int(self.selected_enemy.x)}, {int(self.selected_enemy.y)})"
-                pyxel.text(5, 55, selected_text, 8)
+                selected_text = f"Selected Enemy at {current_city_name}:"
+                pyxel.text(5, 65, selected_text, 8)
+                pos_text = f"  Position: ({int(self.selected_enemy.x)}, {int(self.selected_enemy.y)})"
+                pyxel.text(5, 75, pos_text, 8)
                 # 敵の戦闘ステータスを表示
-                status_text = f"Life: {self.selected_enemy.life}/{self.selected_enemy.max_life}, Attack: {self.selected_enemy.attack}"
-                pyxel.text(5, 65, status_text, 8)
+                status_text = f"  Life: {self.selected_enemy.life}/{self.selected_enemy.max_life}, Attack: {self.selected_enemy.attack}"
+                pyxel.text(5, 85, status_text, 8)
             else:
-                pyxel.text(5, 55, "No character selected", 8)
+                pyxel.text(5, 65, "No character selected", 8)
+                
+        elif page == 2:
+            # ページ2: カメラとマップ情報
+            pyxel.text(5, 15, "Camera & Map Information", 14)
             
             # カメラ位置を表示
             camera_text = f"Camera: ({int(self.camera_x)}, {int(self.camera_y)})"
-            pyxel.text(5, 75, camera_text, 10)
+            pyxel.text(5, 25, camera_text, 10)
             
             # カメラ追従情報を表示
             if self.camera_follow_target:
                 follow_info = f"Camera following: {self.camera_follow_target.ai_type if hasattr(self.camera_follow_target, 'ai_type') else 'Player'}"
-                pyxel.text(5, 85, follow_info, 13)
+                pyxel.text(5, 35, follow_info, 13)
             else:
-                pyxel.text(5, 85, "Camera: Manual control", 6)
+                pyxel.text(5, 35, "Camera: Manual control", 6)
+                
             # Cities情報を表示
-            pyxel.text(5, 100, "Cities:", 14)
-            for i, (city_name, city) in enumerate(self.game_state.cities.items()):
+            pyxel.text(5, 50, "Cities:", 14)
+            y_pos = 60
+            for city_name, city in self.game_state.cities.items():
+                if y_pos > screen_height - 10:  # 画面からはみ出さないように制限
+                    break
                 city_info = f"{city.name}: ({int(city.x)}, {int(city.y)})"
-                pyxel.text(5, 110 + i * 8, city_info, 12)
+                pyxel.text(5, y_pos, city_info, 12)
+                y_pos += 10
+                
+        elif page == 3:
+            # ページ3: キャラクター情報とAI情報
+            pyxel.text(5, 15, "Characters & AI Information", 14)
             
             # プレイヤーの情報を表示
-            pyxel.text(5, 140, "Players:", 14)
+            pyxel.text(5, 25, "Players:", 14)
+            y_pos = 35
             for i, player in enumerate(self.game_state.players):
                 player_city_name = player.current_city_name if player.current_city_name else "None"
                 player_info = f"Player {i+1} at {player_city_name}: Life {player.life}/{player.max_life}"
-                pyxel.text(5, 150 + i * 8, player_info, 11)
+                pyxel.text(5, y_pos, player_info, 11)
+                y_pos += 10
             
             # 敵の情報を表示
-            pyxel.text(5, 158, "Enemies:", 14)
+            y_pos += 5
+            pyxel.text(5, y_pos, "Enemies:", 14)
+            y_pos += 10
             for i, enemy in enumerate(self.game_state.enemies):
                 enemy_city_name = enemy.current_city_name if enemy.current_city_name else "None"
-                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {enemy_city_name}: Life {enemy.life}/{enemy.max_life}"
-                pyxel.text(5, 168 + i * 8, enemy_info, 8)
-              # AI凡例を表示
-            pyxel.text(5, 190, "AI Legend:", 14)
-            pyxel.circ(15, 198, 2, 8)   # 赤色
-            pyxel.text(20, 196, "Aggressive", 7)
-            pyxel.circ(80, 198, 2, 11)  # ライトブルー  
-            pyxel.text(85, 196, "Patrol", 7)
-            pyxel.circ(15, 206, 2, 3)   # 緑色
-            pyxel.text(20, 204, "Defensive", 7)
-            pyxel.circ(80, 206, 2, 14)  # ピンク
-            pyxel.text(85, 204, "Random", 7)
+                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {enemy_city_name}:"
+                pyxel.text(5, y_pos, enemy_info, 8)
+                y_pos += 10
+                life_info = f"  Life {enemy.life}/{enemy.max_life}"
+                pyxel.text(5, y_pos, life_info, 8)
+                y_pos += 10
+                
+            # AI凡例を表示（画面の下部に）
+            legend_y = screen_height - 35
+            pyxel.text(5, legend_y, "AI Legend:", 14)
+            pyxel.circ(15, legend_y + 8, 2, 8)   # 赤色
+            pyxel.text(20, legend_y + 6, "Aggressive", 7)
+            pyxel.circ(80, legend_y + 8, 2, 11)  # ライトブルー  
+            pyxel.text(85, legend_y + 6, "Patrol", 7)
+            pyxel.circ(15, legend_y + 16, 2, 3)   # 緑色
+            pyxel.text(20, legend_y + 14, "Defensive", 7)
+            pyxel.circ(80, legend_y + 16, 2, 14)  # ピンク
+            pyxel.text(85, legend_y + 14, "Random", 7)
             
             # AI情報を表示（エネミーターン時）
             if self.game_state.current_turn == "enemy":
                 ai_info = f"AI Timer: {self.game_state.ai_timer}/{self.game_state.ai_decision_delay}"
-                pyxel.text(5, 216, ai_info, 8)
+                pyxel.text(5, legend_y - 20, ai_info, 8)
             
             # 戦闘処理状態を表示
             if self.is_processing_battles:
                 battle_info = f"Processing battles: {self.current_battle_index + 1}/{len(self.pending_battle_results)}"
-                y_pos = 226 if self.game_state.current_turn == "enemy" else 216
-                pyxel.text(5, y_pos, battle_info, 13)
+                battle_y = legend_y - 30 if self.game_state.current_turn == "enemy" else legend_y - 20
+                pyxel.text(5, battle_y, battle_info, 13)
+            
             # マウスクリック座標を表示
             if self.click_timer > 0:
                 coord_text = f"Click: ({self.click_x}, {self.click_y})"
-                if self.is_processing_battles:
-                    y_pos = 236 if self.game_state.current_turn == "enemy" else 226
-                else:
-                    y_pos = 226 if self.game_state.current_turn == "enemy" else 216
-                pyxel.text(5, y_pos, coord_text, 8)
+                click_y = legend_y - 40 if (self.is_processing_battles and self.game_state.current_turn == "enemy") else \
+                         legend_y - 30 if (self.is_processing_battles or self.game_state.current_turn == "enemy") else \
+                         legend_y - 20
+                pyxel.text(5, click_y, coord_text, 8)
                 
             # 現在のマウス座標も表示
             mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
-            if self.is_processing_battles:
-                y_pos = 246 if self.game_state.current_turn == "enemy" else 236
-            else:
-                y_pos = 236 if self.game_state.current_turn == "enemy" else 226
-            pyxel.text(5, y_pos, mouse_text, 10)
-        else:
-            # デバッグ情報非表示時は最小限の情報のみ
-            pyxel.text(5, 5, "Press V for debug info", 8)
+            mouse_y = click_y - 10 if self.click_timer > 0 else \
+                     legend_y - 40 if (self.is_processing_battles and self.game_state.current_turn == "enemy") else \
+                     legend_y - 30 if (self.is_processing_battles or self.game_state.current_turn == "enemy") else \
+                     legend_y - 20
+            pyxel.text(5, mouse_y, mouse_text, 10)
