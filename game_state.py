@@ -9,6 +9,14 @@ class City:
         self.y = y
         self.size = 20
     
+    def get_hover_info(self) -> List[str]:
+        """ホバー時に表示する情報を取得"""
+        return [
+            f"City: {self.name}",
+            f"Position: ({int(self.x)}, {int(self.y)})",
+            f"Size: {self.size}"
+        ]
+    
     def to_dict(self) -> Dict[str, Any]:
         return {
             'name': self.name,
@@ -57,6 +65,19 @@ class Character:
         self.max_life = life  # 最大兵力
         self.attack = attack  # 攻撃力
     
+    def get_hover_info(self) -> List[str]:
+        """ホバー時に表示する情報を取得（基底クラスの実装）"""
+        info_lines = []
+        current_city = self.current_city_name if self.current_city_name else "None"
+        info_lines.append(f"Location: {current_city}")
+        info_lines.append(f"Life: {self.life}/{self.max_life}")
+        info_lines.append(f"Attack: {self.attack}")
+        
+        if self.is_moving:
+            info_lines.append("Moving...")
+        
+        return info_lines
+    
     def to_dict(self) -> Dict[str, Any]:
         return {
             'x': self.x,
@@ -98,6 +119,12 @@ class Player(Character):
     def __init__(self, x: float, y: float, current_city_name: Optional[str] = None):
         super().__init__(x, y, current_city_name, speed=2, life=120, attack=25, image_index=0)  # 1段目を使用
     
+    def get_hover_info(self) -> List[str]:
+        """プレイヤー用のホバー情報を取得"""
+        info_lines = ["Player"]
+        info_lines.extend(super().get_hover_info())
+        return info_lines
+    
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()
         data['type'] = 'player'
@@ -116,6 +143,23 @@ class Enemy(Character):
         self.patrol_city_names: List[str] = []
         self.patrol_index = 0
         self.last_player_position: Optional[Dict[str, float]] = None
+    
+    def get_hover_info(self) -> List[str]:
+        """敵用のホバー情報を取得"""
+        info_lines = [f"Enemy ({self.ai_type})"]
+        info_lines.extend(super().get_hover_info())
+        
+        # AI特性の説明を追加
+        if self.ai_type == "aggressive":
+            info_lines.append("Pursues players")
+        elif self.ai_type == "defensive":
+            info_lines.append("Avoids players")
+        elif self.ai_type == "patrol":
+            info_lines.append("Patrols route")
+        elif self.ai_type == "random":
+            info_lines.append("Moves randomly")
+        
+        return info_lines
     
     def to_dict(self) -> Dict[str, Any]:
         data = super().to_dict()

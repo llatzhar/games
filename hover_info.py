@@ -2,7 +2,11 @@ import pyxel
 from game import screen_width, screen_height
 
 class HoverInfo:
-    """マウスカーソルが重なった際の情報表示クラス"""
+    """マウスカーソルが重なった際の情報表示クラス
+    
+    各オブジェクト（Player, Enemy, City）のget_hover_info()メソッドを呼び出して
+    統一的に情報を表示する
+    """
     
     def __init__(self):
         self.padding = 4  # 枠の内側の余白
@@ -81,51 +85,12 @@ class HoverInfo:
             text_y += self.line_height
     
     def get_character_info(self, character):
-        """キャラクターの情報を取得"""
-        info_lines = []
-        
-        # キャラクタータイプを判定
-        char_type = "Player" if hasattr(character, 'image_index') and not hasattr(character, 'ai_type') else "Enemy"
-        
-        if char_type == "Enemy":
-            # 敵の場合
-            info_lines.append(f"Enemy ({character.ai_type})")
-            current_city = character.current_city_name if character.current_city_name else "None"
-            info_lines.append(f"Location: {current_city}")
-            info_lines.append(f"Life: {character.life}/{character.max_life}")
-            info_lines.append(f"Attack: {character.attack}")
-            
-            # AI特性の説明
-            if character.ai_type == "aggressive":
-                info_lines.append("Pursues players")
-            elif character.ai_type == "defensive":
-                info_lines.append("Avoids players")
-            elif character.ai_type == "patrol":
-                info_lines.append("Patrols route")
-            elif character.ai_type == "random":
-                info_lines.append("Moves randomly")
-        else:
-            # プレイヤーの場合
-            info_lines.append("Player")
-            current_city = character.current_city_name if character.current_city_name else "None"
-            info_lines.append(f"Location: {current_city}")
-            info_lines.append(f"Life: {character.life}/{character.max_life}")
-            info_lines.append(f"Attack: {character.attack}")
-            
-            if character.is_moving:
-                info_lines.append("Moving...")
-        
-        return info_lines
+        """キャラクターの情報を取得（各クラスのget_hover_info()メソッドを使用）"""
+        return character.get_hover_info()
     
     def get_city_info(self, city):
-        """都市の情報を取得"""
-        info_lines = []
-        
-        info_lines.append(f"City: {city.name}")
-        info_lines.append(f"Position: ({int(city.x)}, {int(city.y)})")
-        info_lines.append(f"Size: {city.size}")
-        
-        return info_lines
+        """都市の情報を取得（Cityクラスのget_hover_info()メソッドを使用）"""
+        return city.get_hover_info()
     
     def draw_hover_info(self, mouse_x, mouse_y, hovered_character, hovered_city):
         """ホバー情報を描画（キャラクターを優先）"""
