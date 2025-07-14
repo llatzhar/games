@@ -543,6 +543,11 @@ class MapScene(Scene):
             self.game_state.ai_timer = 0  # AIタイマーをリセット
             # エネミーターンからプレイヤーターンに切り替わる際はカメラ追従をクリア
             self.clear_camera_follow()
+            # 敵選択演出の状態をリセット
+            if hasattr(self, 'enemy_selection_timer'):
+                delattr(self, 'enemy_selection_timer')
+            if hasattr(self, 'enemy_selection_target'):
+                delattr(self, 'enemy_selection_target')
         
         # 戦闘がある場合は戦闘シーケンスを開始
         if battle_locations:
@@ -648,14 +653,19 @@ class MapScene(Scene):
         
         # 敵のAI処理（エネミーターン時）
         if self.game_state.current_turn == "enemy" and self.can_move_this_turn():
-            # 敵が移動していない場合のみAIタイマーを進める
+            # 敵が移動していない場合の処理
             if not any(enemy.is_moving for enemy in self.game_state.enemies):
-                self.game_state.ai_timer += 1
-                
-                # AI決定遅延時間が経過したら敵の行動を実行
-                if self.game_state.ai_timer >= self.game_state.ai_decision_delay:
-                    self.execute_enemy_ai_turn()
-                    self.game_state.ai_timer = 0
+                if not hasattr(self, 'enemy_selection_timer'):
+                    # 敵選択演出を開始
+                    self.start_enemy_selection_effect()
+                else:
+                    # 敵選択演出のタイマーを更新
+                    self.enemy_selection_timer -= 1
+                    if self.enemy_selection_timer <= 0:
+                        # 選択演出が完了したら移動実行
+                        self.finish_enemy_selection_effect()
+                        delattr(self, 'enemy_selection_timer')
+                        delattr(self, 'enemy_selection_target')
         
         # マウスクリック検出
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
@@ -1082,6 +1092,25 @@ class MapScene(Scene):
                         # 左右の線
                         pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
                         pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
+                
+                # 敵選択演出中の点滅表示
+                if (hasattr(self, 'enemy_selection_target') and enemy == self.enemy_selection_target and 
+                    self.game_state.current_turn == "enemy"):
+                    # 高速点滅効果（0.5秒間で2回点滅）
+                    if (pyxel.frame_count // 4) % 2 == 0:
+                        frame_color = 10  # 黄色
+                        
+                        # 枠線を描画
+                        frame_x = int(enemy_screen_x - half_width - 2)
+                        frame_y = int(enemy_screen_y - half_height - 2)
+                        frame_w = enemy.width + 4
+                        frame_h = enemy.height + 4
+                        
+                        # 太い枠線を描画
+                        pyxel.rect(frame_x, frame_y, frame_w, 2, frame_color)
+                        pyxel.rect(frame_x, frame_y + frame_h - 2, frame_w, 2, frame_color)
+                        pyxel.rect(frame_x, frame_y, 2, frame_h, frame_color)
+                        pyxel.rect(frame_x + frame_w - 2, frame_y, 2, frame_h, frame_color)
         # UI表示
         # ホバー情報の表示（最優先で表示）
         mouse_x = pyxel.mouse_x
@@ -1257,3 +1286,48 @@ class MapScene(Scene):
                      legend_y - 30 if (self.is_processing_battles or self.game_state.current_turn == "enemy") else \
                      legend_y - 20
             pyxel.text(5, mouse_y, mouse_text, 10)
+
+    def start_enemy_selection_effect(self):
+        """敵選択演出を開始"""
+        # まだ移動していない敵を選択
+        available_enemies = [enemy for enemy in self.game_state.enemies if not enemy.is_moving]
+        if not available_enemies:
+            return
+        
+        # ランダムに敵を選択
+        selected_enemy = random.choice(available_enemies)
+        selected_enemy_index = self.game_state.enemies.index(selected_enemy)
+        
+        # 選択演出用の変数を設定
+        self.enemy_selection_target = selected_enemy
+        self.enemy_selection_timer = 30  # 0.5秒 (30fps * 0.5秒)
+        self.game_state.current_ai_enemy_index = selected_enemy_index  # 現在AI処理中の敵を記録
+        
+        # 敵を選択時にカメラ追従を設定
+        self.set_camera_follow_target(selected_enemy)
+    
+    def finish_enemy_selection_effect(self):
+        """敵選択演出を終了して移動を実行"""
+        if not hasattr(self, 'enemy_selection_target'):
+            return
+            
+        selected_enemy = self.enemy_selection_target
+        
+        # AIに基づいて移動先を決定
+        target_city = self.decide_enemy_action(selected_enemy)
+        
+        if target_city:
+            target_city_id = target_city.id
+            if self.game_state.are_cities_connected(selected_enemy.current_city_id, target_city_id):
+                # 移動実行
+                selected_enemy.target_x = target_city.x
+                selected_enemy.target_y = target_city.y
+                selected_enemy.target_city_id = target_city_id  # 内部IDを設定
+                selected_enemy.is_moving = True
+                self.game_state.enemy_moved_this_turn = True
+            
+            # パトロールAIの場合はインデックスを更新
+            if selected_enemy.ai_type == "patrol" and target_city_id in selected_enemy.patrol_city_ids:
+                selected_enemy.patrol_index = selected_enemy.patrol_city_ids.index(target_city_id)
+        
+        self.game_state.current_ai_enemy_index = None  # AI処理完了
