@@ -1262,7 +1262,7 @@ class MapScene(Scene):
             
             # AI情報を表示（エネミーターン時）
             if self.game_state.current_turn == "enemy":
-                ai_info = f"AI Timer: {self.game_state.ai_timer}/{self.game_state.ai_decision_delay}"
+                ai_info = f"AI Timer: {self.game_state.ai_timer}"
                 pyxel.text(5, legend_y - 20, ai_info, 8)
             
             # 戦闘処理状態を表示

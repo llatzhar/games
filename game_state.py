@@ -195,7 +195,6 @@ class GameState:
         self.player_moved_this_turn = False
         self.enemy_moved_this_turn = False
         self.ai_timer = 0
-        self.ai_decision_delay = 60
         self.current_ai_enemy_index: Optional[int] = None
         
         # ゲーム状態ファイルのパス
@@ -301,7 +300,6 @@ class GameState:
             'player_moved_this_turn': self.player_moved_this_turn,
             'enemy_moved_this_turn': self.enemy_moved_this_turn,
             'ai_timer': self.ai_timer,
-            'ai_decision_delay': self.ai_decision_delay,
             'current_ai_enemy_index': self.current_ai_enemy_index
         }
     
@@ -326,7 +324,6 @@ class GameState:
         self.player_moved_this_turn = data['player_moved_this_turn']
         self.enemy_moved_this_turn = data['enemy_moved_this_turn']
         self.ai_timer = data.get('ai_timer', 0)
-        self.ai_decision_delay = data.get('ai_decision_delay', 60)
         self.current_ai_enemy_index = data.get('current_ai_enemy_index')
     
     def save_to_file(self):
