@@ -4,7 +4,7 @@ from game import SubScene
 class BattleSubScene(SubScene):
     def __init__(self, parent_scene, battle_info, city):
         super().__init__(parent_scene)
-        self.battle_info = battle_info  # 戦闘場所情報（まだ戦闘は実行されていない）
+        self.battle_info = battle_info  # 戦闘場所情報
         self.city = city
         self.animation_timer = 0
         self.max_animation_time = 240  # 8秒間（30fps * 8秒）
@@ -20,16 +20,21 @@ class BattleSubScene(SubScene):
         self.initial_player_lives = [p.life for p in self.battle_players]
         self.initial_enemy_lives = [e.life for e in self.battle_enemies]
         
-        # 戦闘計算を実行（ここで初めて実際の戦闘を行う）
-        self.battle_result = self.execute_battle()
+        # 戦闘結果を取得（すでに計算済み）
+        if 'battle_result' in battle_info:
+            self.battle_result = battle_info['battle_result']
+        else:
+            # 戦闘結果がない場合は計算
+            self.battle_result = self.execute_battle()
         
         # 戦闘ログから情報を抽出
         self.parse_battle_log()
         
     def execute_battle(self):
-        """戦闘を実行して結果を返す"""
+        """戦闘を実行して結果を返す（実際のライフ減少は行わない）"""
         battle_log = []
         city_name = self.city.name
+        battle_actions = []
         
         # プレイヤーの攻撃フェーズ
         total_player_attack = sum(p.attack for p in self.battle_players)
@@ -37,8 +42,17 @@ class BattleSubScene(SubScene):
             # 最も弱い敵から攻撃
             target_enemy = min(self.battle_enemies, key=lambda e: e.life)
             damage = min(total_player_attack, target_enemy.life)
-            target_enemy.life -= damage
             battle_log.append(f"Players dealt {damage} damage to {target_enemy.ai_type} enemy in {city_name}")
+            
+            # 戦闘アクションを記録（実際の適用は後で）
+            battle_actions.append({
+                'type': 'damage',
+                'target_type': 'enemy',
+                'target_city_id': self.city.id,
+                'target_ai_type': target_enemy.ai_type,
+                'target_life': target_enemy.life,
+                'damage': damage
+            })
         
         # 敵の攻撃フェーズ
         total_enemy_attack = sum(e.attack for e in self.battle_enemies)
@@ -46,14 +60,23 @@ class BattleSubScene(SubScene):
             # 最も弱いプレイヤーから攻撃
             target_player = min(self.battle_players, key=lambda p: p.life)
             damage = min(total_enemy_attack, target_player.life)
-            target_player.life -= damage
             battle_log.append(f"Enemies dealt {damage} damage to player in {city_name}")
+            
+            # 戦闘アクションを記録（実際の適用は後で）
+            battle_actions.append({
+                'type': 'damage',
+                'target_type': 'player',
+                'target_city_id': self.city.id,
+                'target_life': target_player.life,
+                'damage': damage
+            })
         
         return {
             'city_id': self.city.id,
             'log': battle_log,
             'players_before': len(self.battle_players),
-            'enemies_before': len(self.battle_enemies)
+            'enemies_before': len(self.battle_enemies),
+            'battle_actions': battle_actions
         }
         
     def parse_battle_log(self):
@@ -339,25 +362,45 @@ class BattleSubScene(SubScene):
     
     def get_displayed_life(self, character, initial_life, character_type):
         """戦闘の進行に応じて表示するライフ値を計算"""
-        if self.phase == "intro":
-            # 戦闘開始前のライフを表示
-            return initial_life
-        elif self.phase == "player_attack" and character_type == "enemy":
-            # プレイヤー攻撃フェーズ中の敵のライフは徐々に減る
-            if self.phase_timer < 60:  # 2秒間で減少
-                progress = self.phase_timer / 60
-                damage_taken = initial_life - character.life
-                return int(initial_life - damage_taken * progress)
-            else:
-                return character.life
-        elif self.phase == "enemy_attack" and character_type == "player":
-            # 敵攻撃フェーズ中のプレイヤーのライフは徐々に減る
-            if self.phase_timer < 60:  # 2秒間で減少
-                progress = self.phase_timer / 60
-                damage_taken = initial_life - character.life
-                return int(initial_life - damage_taken * progress)
-            else:
-                return character.life
-        else:
-            # その他の場合は現在のライフを表示
-            return character.life
+        # 各フェーズで適用される累積ダメージを計算
+        total_damage = 0
+        
+        if character_type == "enemy":
+            # 敵が受けるダメージはプレイヤーの攻撃のみ
+            player_damage = self.player_damage if hasattr(self, 'player_damage') else 0
+            
+            if self.phase == "intro":
+                # 戦闘開始前はダメージなし
+                total_damage = 0
+            elif self.phase == "player_attack":
+                # プレイヤー攻撃フェーズ中は徐々にダメージが適用される
+                if self.phase_timer < 60:  # 2秒間で減少
+                    progress = self.phase_timer / 60
+                    total_damage = player_damage * progress
+                else:
+                    total_damage = player_damage
+            elif self.phase in ["enemy_attack", "results", "outro"]:
+                # プレイヤー攻撃完了後はフルダメージが適用される
+                total_damage = player_damage
+                
+        elif character_type == "player":
+            # プレイヤーが受けるダメージは敵の攻撃のみ
+            enemy_damage = self.enemy_damage if hasattr(self, 'enemy_damage') else 0
+            
+            if self.phase in ["intro", "player_attack"]:
+                # 敵の攻撃前はダメージなし
+                total_damage = 0
+            elif self.phase == "enemy_attack":
+                # 敵攻撃フェーズ中は徐々にダメージが適用される
+                if self.phase_timer < 60:  # 2秒間で減少
+                    progress = self.phase_timer / 60
+                    total_damage = enemy_damage * progress
+                else:
+                    total_damage = enemy_damage
+            elif self.phase in ["results", "outro"]:
+                # 敵攻撃完了後はフルダメージが適用される
+                total_damage = enemy_damage
+        
+        # 初期ライフからダメージを差し引いて表示ライフを計算
+        displayed_life = max(0, int(initial_life - total_damage))
+        return displayed_life

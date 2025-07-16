@@ -435,8 +435,19 @@ class MapScene(Scene):
         """戦闘シーケンスを開始"""
         if not battle_locations:
             return
+        
+        # 戦闘情報から実際の戦闘結果を計算
+        battle_results = []
+        for battle_info in battle_locations:
+            city_id = battle_info['city_id']
+            players = battle_info['players']
+            enemies = battle_info['enemies']
             
-        self.pending_battle_results = battle_locations
+            # 実際の戦闘計算を実行
+            battle_result = self.game_state.execute_battle(city_id, players, enemies)
+            battle_results.append(battle_result)
+        
+        self.pending_battle_results = battle_results
         self.current_battle_index = 0
         self.is_processing_battles = True
         
@@ -479,13 +490,24 @@ class MapScene(Scene):
     
     def start_current_battle_scene(self):
         """現在の戦闘のBattleSubSceneを開始"""
-        current_battle = self.pending_battle_results[self.current_battle_index]
-        city_id = current_battle['city_id']
+        current_battle_result = self.pending_battle_results[self.current_battle_index]
+        city_id = current_battle_result['city_id']
         city = self.game_state.get_city_by_id(city_id)
         
         if city:
+            # 戦闘結果から戦闘情報を再構築
+            players_in_city, enemies_in_city = self.game_state.get_characters_in_city(city_id)
+            battle_info = {
+                'city_id': city_id,
+                'players': players_in_city,
+                'enemies': enemies_in_city,
+                'players_before': current_battle_result['players_before'],
+                'enemies_before': current_battle_result['enemies_before'],
+                'battle_result': current_battle_result  # 戦闘結果も含める
+            }
+            
             # BattleSubSceneを開始
-            battle_sub_scene = BattleSubScene(self, current_battle, city)
+            battle_sub_scene = BattleSubScene(self, battle_info, city)
             self.set_sub_scene(battle_sub_scene)
     
     def on_battle_scene_finished(self):
@@ -502,11 +524,16 @@ class MapScene(Scene):
     def finish_battle_sequence(self):
         """戦闘シーケンスを終了"""
         self.is_processing_battles = False
-        self.pending_battle_results = []
-        self.current_battle_index = 0
+        
+        # 戦闘結果を適用（HPの減少）
+        self.game_state.apply_multiple_battle_results(self.pending_battle_results)
         
         # 戦闘シーケンス完了後に倒されたキャラクターを削除
         self.game_state.remove_defeated_characters()
+        
+        # 戦闘結果をクリア
+        self.pending_battle_results = []
+        self.current_battle_index = 0
         
         # ターン切り替えのカットインを表示
         if self.game_state.current_turn == "player":
