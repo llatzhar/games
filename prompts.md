@@ -78,3 +78,10 @@ if (super().update())
 return self;
 と書けるとシンプルそう
 ```
+
+
+```
+map.pyの構造を大きく変えようと思いますが、その前に現在のmap.pyの満たすべき仕様をREADME.mdにまとめてください。保持している機能、状態遷移、他モジュールとの関係
+map.pyにStateMachineのパターンを適用するとしたらどのようなStateになるか、READMEに書いてみて
+map.pyをREADMEにしたがって状態マシンを適用してみて
+```

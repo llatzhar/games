@@ -8,6 +8,8 @@ from game_state import GameState, City, Road, Player, Enemy
 from cutin import CutinSubScene
 from battle import BattleSubScene
 from hover_info import HoverInfo
+from map_state_machine import StateContext
+from map_states import PlayerTurnState
 
 class MapScene(Scene):
     def __init__(self):
@@ -29,7 +31,7 @@ class MapScene(Scene):
         
         self.selected_enemy = None  # 選択中の敵（エネミーターン用）
         
-        # 戦闘処理用
+        # 戦闘処理用（後方互換性のため残す）
         self.pending_battle_results = []  # 処理待ちの戦闘結果
         self.current_battle_index = 0  # 現在処理中の戦闘インデックス
         self.is_processing_battles = False  # 戦闘処理中フラグ
@@ -63,6 +65,13 @@ class MapScene(Scene):
         
         # ホバー情報表示
         self.hover_info = HoverInfo()
+        
+        # 状態マシン初期化
+        self.state_context = StateContext()
+        self.state_context.change_state(PlayerTurnState(self))
+        
+        # シーン遷移用
+        self.next_scene = None
 
     def generate_30x30_map(self):
         """30x30のマップを生成"""
@@ -640,188 +649,32 @@ class MapScene(Scene):
         if super().update():
             return self
         
-        # 戦闘処理中の場合
-        if self.is_processing_battles:
-            # Qキーでタイトルシーンに戻ることは可能
-            if pyxel.btnp(pyxel.KEY_Q):
-                from game import TitleScene
-                return TitleScene()
-                
-            # カメラ移動後の待機時間
-            if hasattr(self, 'battle_camera_timer'):
-                self.battle_camera_timer -= 1
-                if self.battle_camera_timer <= 0:
-                    delattr(self, 'battle_camera_timer')
-                    self.start_current_battle_scene()
-            return self
-        
-        # メインの処理
+        # 共通入力処理（全状態で有効）
         # Qキーでタイトルシーンに戻る
         if pyxel.btnp(pyxel.KEY_Q):
             from game import TitleScene
             return TitleScene()
         
-        # ESCキーでプレイヤー選択を解除
-        if pyxel.btnp(pyxel.KEY_ESCAPE):
-            if self.game_state.current_turn == "player":
-                self.selected_player = None
-            else:
-                self.selected_enemy = None
-            
         # Vキーでデバッグ情報のページ切り替え
         if pyxel.btnp(pyxel.KEY_V):
             self.debug_page = (self.debug_page + 1) % (self.max_debug_page + 1)
-            
-        # Spaceキーでターンスキップ
-        if pyxel.btnp(pyxel.KEY_SPACE):
-            if not any(player.is_moving for player in self.game_state.players) and \
-               not any(enemy.is_moving for enemy in self.game_state.enemies):
-                self.switch_turn()
         
-        # 敵のAI処理（エネミーターン時）
-        if self.game_state.current_turn == "enemy" and self.can_move_this_turn():
-            # 敵が移動していない場合の処理
-            if not any(enemy.is_moving for enemy in self.game_state.enemies):
-                if not hasattr(self, 'enemy_selection_timer'):
-                    # 敵選択演出を開始
-                    self.start_enemy_selection_effect()
-                else:
-                    # 敵選択演出のタイマーを更新
-                    self.enemy_selection_timer -= 1
-                    if self.enemy_selection_timer <= 0:
-                        # 選択演出が完了したら移動実行
-                        self.finish_enemy_selection_effect()
-                        delattr(self, 'enemy_selection_timer')
-                        delattr(self, 'enemy_selection_target')
+        # 状態マシンの更新
+        result = self.state_context.update()
+        if result != self:
+            return result
         
-        # マウスクリック検出
-        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-            self.click_x = pyxel.mouse_x
-            self.click_y = pyxel.mouse_y
-            self.click_timer = 120  # 4秒間表示（30fps * 4秒）
-            
-            if self.game_state.current_turn == "player" and self.can_move_this_turn():
-                # プレイヤーターン：プレイヤーとCityのクリック処理
-                clicked_player = self.get_player_at_position(self.click_x, self.click_y)
-                clicked_city = self.get_city_at_position(self.click_x, self.click_y)
-                
-                if clicked_player:
-                    # プレイヤーを選択
-                    self.selected_player = clicked_player
-                elif clicked_city and self.selected_player:
-                    # プレイヤーの現在位置のCityを取得
-                    current_city = self.get_player_current_city(self.selected_player)
-                    
-                    if current_city and self.is_cities_connected(current_city, clicked_city):
-                        # 接続されているCityにのみ移動可能
-                        clicked_city_id = clicked_city.id
-                        self.selected_player.target_x = clicked_city.x
-                        self.selected_player.target_y = clicked_city.y
-                        self.selected_player.target_city_id = clicked_city_id  # IDを設定
-                        self.selected_player.is_moving = True
-                        self.game_state.player_moved_this_turn = True
-                        # プレイヤー移動時に自動セーブ
-                        self.game_state.auto_save()
-                    elif current_city and current_city != clicked_city:
-                        # 接続されていないCityへの移動は拒否
-                        pass
-                    elif current_city == clicked_city:
-                        # 同じCityをクリックした場合は移動しない
-                        pass
-            
-            elif self.game_state.current_turn == "enemy" and self.can_move_this_turn():
-                # エネミーターン：敵とCityのクリック処理
-                clicked_enemy = self.get_enemy_at_position(self.click_x, self.click_y)
-                clicked_city = self.get_city_at_position(self.click_x, self.click_y)
-                
-                if clicked_enemy:
-                    # 敵を選択
-                    self.selected_enemy = clicked_enemy
-                    # 敵を選択時にカメラ追従を設定
-                    self.set_camera_follow_target(clicked_enemy)
-                elif clicked_city and self.selected_enemy:
-                    # 敵の現在位置のCityを取得
-                    current_city = self.game_state.get_city_by_id(self.selected_enemy.current_city_id) if self.selected_enemy.current_city_id else None
-                    
-                    if current_city and self.is_cities_connected(current_city, clicked_city):
-                        # 接続されているCityにのみ移動可能
-                        clicked_city_id = clicked_city.id
-                        self.selected_enemy.target_x = clicked_city.x
-                        self.selected_enemy.target_y = clicked_city.y
-                        self.selected_enemy.target_city_id = clicked_city_id  # IDを設定
-                        self.selected_enemy.is_moving = True
-                        self.game_state.enemy_moved_this_turn = True
-                        # 敵移動時に自動セーブ
-                        self.game_state.auto_save()
-                    elif current_city and current_city != clicked_city:
-                        # 接続されていないCityへの移動は拒否
-                        pass
-                    elif current_city == clicked_city:
-                        # 同じCityをクリックした場合は移動しない
-                        pass
+        # 状態固有の入力処理
+        self.state_context.handle_input()
+        
+        # シーン遷移チェック
+        if self.next_scene:
+            return self.next_scene
         
         # クリック座標表示時間を減らす
         if self.click_timer > 0:
             self.click_timer -= 1
 
-        # プレイヤーの移動処理
-        for player in self.game_state.players:
-            if player.is_moving and player.target_x is not None and player.target_y is not None:
-                # 目標地点への移動ベクトルを計算
-                dx = player.target_x - player.x
-                dy = player.target_y - player.y
-                distance = (dx * dx + dy * dy) ** 0.5
-                
-                # 移動方向に基づいて向きを更新
-                if abs(dx) > 1:  # 横方向の移動が十分大きい場合のみ向きを変更
-                    player.facing_right = dx > 0
-                
-                if distance <= player.speed:
-                    # 目標地点に到達
-                    player.x = player.target_x
-                    player.y = player.target_y
-                    player.current_city_id = player.target_city_id  # 現在位置Cityを更新
-                    player.is_moving = False
-                    player.target_x = None
-                    player.target_y = None
-                    player.target_city_id = None
-                    # プレイヤーの移動完了時にターン切り替え
-                    if self.game_state.current_turn == "player":
-                        self.switch_turn()
-                else:
-                    # 目標地点に向かって移動
-                    player.x += (dx / distance) * player.speed
-                    player.y += (dy / distance) * player.speed
-        
-        # 敵の移動処理
-        for enemy in self.game_state.enemies:
-            if enemy.is_moving and enemy.target_x is not None and enemy.target_y is not None:
-                # 目標地点への移動ベクトルを計算
-                dx = enemy.target_x - enemy.x
-                dy = enemy.target_y - enemy.y
-                distance = (dx * dx + dy * dy) ** 0.5
-                
-                # 移動方向に基づいて向きを更新
-                if abs(dx) > 1:  # 横方向の移動が十分大きい場合のみ向きを変更
-                    enemy.facing_right = dx > 0
-                
-                if distance <= enemy.speed:
-                    # 目標地点に到達
-                    enemy.x = enemy.target_x
-                    enemy.y = enemy.target_y
-                    enemy.current_city_id = enemy.target_city_id  # 現在位置Cityを更新
-                    enemy.is_moving = False
-                    enemy.target_x = None
-                    enemy.target_y = None
-                    enemy.target_city_id = None
-                    # 敵の移動完了時にターン切り替え
-                    if self.game_state.current_turn == "enemy":
-                        self.switch_turn()
-                else:
-                    # 目標地点に向かって移動
-                    enemy.x += (dx / distance) * enemy.speed
-                    enemy.y += (dy / distance) * enemy.speed
-            
         # カメラ追従の更新処理
         self.update_camera_follow()
         
@@ -844,17 +697,41 @@ class MapScene(Scene):
         self.camera_x = max(0, min(self.camera_x, self.map_pixel_width - screen_width))
         self.camera_y = max(0, min(self.camera_y, self.map_pixel_height - screen_height))
         
-        # ゲーム終了条件をチェック
-        if not self.game_state.players:
-            # 全プレイヤーが倒された場合
-            pyxel.text(screen_width // 2 - 30, screen_height // 2, "GAME OVER", 8)
-            pyxel.text(screen_width // 2 - 40, screen_height // 2 + 10, "Press Q to return to title", 7)
-        elif not self.game_state.enemies:
-            # 全敵が倒された場合
-            pyxel.text(screen_width // 2 - 20, screen_height // 2, "VICTORY!", 11)
-            pyxel.text(screen_width // 2 - 40, screen_height // 2 + 10, "Press Q to return to title", 7)
-        
         return self
+
+    def change_state(self, new_state):
+        """状態を変更（StateContextへの委譲）"""
+        self.state_context.change_state(new_state)
+    
+    def transition_to_scene(self, new_scene):
+        """シーン遷移（状態マシンから呼び出される）"""
+        return new_scene
+    
+    def move_camera_to_city(self, city):
+        """カメラを指定した都市に移動"""
+        target_camera_x = city.x - self.camera_offset_x
+        target_camera_y = city.y - self.camera_offset_y
+        
+        # マップ範囲内に制限
+        target_camera_x = max(0, min(target_camera_x, self.map_pixel_width - screen_width))
+        target_camera_y = max(0, min(target_camera_y, self.map_pixel_height - screen_height))
+        
+        # カメラ位置を即座に設定（アニメーションなしで即移動）
+        self.camera_x = target_camera_x
+        self.camera_y = target_camera_y
+        
+        # カメラ追従をクリア
+        self.clear_camera_follow()
+    
+    def on_sub_scene_finished(self, finished_sub_scene):
+        """サブシーン終了時の処理"""
+        # BattleSubSceneが終了した場合
+        if isinstance(finished_sub_scene, BattleSubScene):
+            # BattleSequenceStateに戦闘終了を通知
+            from map_state_machine import MapStateType
+            if (self.state_context.get_current_state_type() == MapStateType.BATTLE_SEQUENCE and
+                hasattr(self.state_context.current_state, 'on_battle_finished')):
+                self.state_context.current_state.on_battle_finished()
 
 
     def draw(self):
@@ -1149,6 +1026,13 @@ class MapScene(Scene):
         
         self.hover_info.draw_hover_info(mouse_x, mouse_y, hovered_character, hovered_city, self.game_state)
         
+        # ゲーム終了状態の場合はオーバーレイ表示
+        from map_state_machine import MapStateType
+        if (self.state_context.get_current_state_type() == MapStateType.GAME_OVER or 
+            self.state_context.get_current_state_type() == MapStateType.VICTORY):
+            if hasattr(self.state_context.current_state, 'draw_overlay'):
+                self.state_context.current_state.draw_overlay()
+        
         # デバッグ情報の表示（ページ切り替え対応）
         if self.debug_page > 0:
             self.draw_debug_page(self.debug_page)
@@ -1179,6 +1063,9 @@ class MapScene(Scene):
             can_move = "YES" if self.can_move_this_turn() else "NO"
             move_text = f"Can move this turn: {can_move}"
             pyxel.text(5, 55, move_text, 10)
+            
+            # 状態マシン情報を表示
+            self.state_context.draw_debug_info(5, 65)
             
             # 選択中のキャラクター情報を表示
             if self.game_state.current_turn == "player" and self.selected_player:
