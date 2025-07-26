@@ -948,22 +948,47 @@ class MapScene(Scene):
                 
                 # 選択された敵に点滅する枠線を描画（エネミーターン時）
                 if enemy == self.selected_enemy and self.game_state.current_turn == "enemy":
-                    # 点滅効果（30フレームで1回点滅）
-                    if (pyxel.frame_count // 10) % 3 != 0:
-                        frame_color = 8  # 赤色
-                        
-                        # 枠線を描画
-                        frame_x = int(enemy_screen_x - half_width - 1)
-                        frame_y = int(enemy_screen_y - half_height - 1)
-                        frame_w = enemy.width + 2
-                        frame_h = enemy.height + 2
-                        
-                        # 上下の線
-                        pyxel.rect(frame_x, frame_y, frame_w, 1, frame_color)
-                        pyxel.rect(frame_x, frame_y + frame_h - 1, frame_w, 1, frame_color)
-                        # 左右の線
-                        pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
-                        pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
+                    # EnemySelectionState中は特別な点滅効果
+                    from map_state_machine import MapStateType
+                    current_state_type = self.state_context.get_current_state_type()
+                    
+                    if current_state_type == MapStateType.ENEMY_SELECTION:
+                        # EnemySelectionState中の点滅（0.5秒で2回点滅）
+                        current_state = self.state_context.current_state
+                        if hasattr(current_state, 'blink_timer') and hasattr(current_state, 'blink_duration'):
+                            # 点滅状態を計算（blink_duration=15フレーム毎に切り替え）
+                            blink_phase = current_state.blink_timer % current_state.blink_duration
+                            if blink_phase < current_state.blink_duration // 2:
+                                frame_color = 8  # 赤色で表示
+                                
+                                # 枠線を描画
+                                frame_x = int(enemy_screen_x - half_width - 2)
+                                frame_y = int(enemy_screen_y - half_height - 2)
+                                frame_w = enemy.width + 4
+                                frame_h = enemy.height + 4
+                                
+                                # 太い枠線で強調
+                                pyxel.rect(frame_x, frame_y, frame_w, 2, frame_color)  # 上
+                                pyxel.rect(frame_x, frame_y + frame_h - 2, frame_w, 2, frame_color)  # 下
+                                pyxel.rect(frame_x, frame_y, 2, frame_h, frame_color)  # 左
+                                pyxel.rect(frame_x + frame_w - 2, frame_y, 2, frame_h, frame_color)  # 右
+                    else:
+                        # 通常の点滅効果（30フレームで1回点滅）
+                        if (pyxel.frame_count // 10) % 3 != 0:
+                            frame_color = 8  # 赤色
+                            
+                            # 枠線を描画
+                            frame_x = int(enemy_screen_x - half_width - 1)
+                            frame_y = int(enemy_screen_y - half_height - 1)
+                            frame_w = enemy.width + 2
+                            frame_h = enemy.height + 2
+                            
+                            # 上下の線
+                            pyxel.rect(frame_x, frame_y, frame_w, 1, frame_color)
+                            pyxel.rect(frame_x, frame_y + frame_h - 1, frame_w, 1, frame_color)
+                            # 左右の線
+                            pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
+                            pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
         # UI表示
         # ホバー情報の表示（最優先で表示）
         mouse_x = pyxel.mouse_x

@@ -91,58 +91,139 @@ class PlayerTurnState(MapGameState):
     def exit(self):
         pass
 
-class EnemyTurnState(MapGameState):
-    """AIが自動実行される状態"""
+class EnemySelectionState(MapGameState):
+    """敵選択演出状態"""
     
     def __init__(self, context):
-        super().__init__(context, MapStateType.ENEMY_TURN)
+        super().__init__(context, MapStateType.ENEMY_SELECTION)
+        self.selected_enemy = None
+        self.target_city = None
+        self.blink_timer = 0
+        self.blink_count = 0
+        self.max_blinks = 4  # 2回点滅 = 4回の表示切り替え
+        self.blink_duration = 15  # 0.5秒 = 15フレーム（30fps）
         
     def enter(self):
         super().enter()
         self.context.game_state.current_turn = "enemy"
         self.context.game_state.enemy_moved_this_turn = False
         self.context.selected_enemy = None
-        self.context.game_state.ai_timer = 0
         self.context.clear_camera_follow()
+        
+        # AI決定を即座に実行（待機時間なし）
+        self.select_enemy_to_move()
+        
+    def select_enemy_to_move(self):
+        """移動する敵を選択"""
+        # まだ移動していない敵を選択
+        available_enemies = [enemy for enemy in self.context.game_state.enemies if not enemy.is_moving]
+        if available_enemies:
+            self.selected_enemy = random.choice(available_enemies)
+            self.context.selected_enemy = self.selected_enemy
+            # 敵を選択時にカメラ追従を設定
+            self.context.set_camera_follow_target(self.selected_enemy)
+            
+            # AI行動決定
+            self.target_city = self.context.decide_enemy_action(self.selected_enemy)
+            if not self.target_city:
+                # 移動先が見つからない場合はそのまま敵ターン終了
+                self.transition_to(TransitionState(self.context))
+        else:
+            # 移動可能な敵がいない場合はターン終了
+            self.transition_to(TransitionState(self.context))
+    
+    def update(self):
+        if self.selected_enemy is None:
+            return self.context
+            
+        # 点滅演出
+        self.blink_timer += 1
+        if self.blink_timer >= self.blink_duration:
+            self.blink_timer = 0
+            self.blink_count += 1
+            
+            if self.blink_count >= self.max_blinks:
+                # 点滅演出完了、移動実行状態へ遷移
+                self.transition_to(EnemyTurnState(self.context, self.selected_enemy, self.target_city))
+        
+        return self.context
+    
+    def handle_input(self):
+        # この状態では基本的に入力を受け付けない（演出中）
+        # ただし、SPACEキーでスキップ可能
+        if pyxel.btnp(pyxel.KEY_SPACE):
+            self.transition_to(EnemyTurnState(self.context, self.selected_enemy, self.target_city))
+    
+    def exit(self):
+        pass
+
+class EnemyTurnState(MapGameState):
+    """敵移動実行状態"""
+    
+    def __init__(self, context, selected_enemy=None, target_city=None):
+        super().__init__(context, MapStateType.ENEMY_TURN)
+        self.selected_enemy = selected_enemy
+        self.target_city = target_city
+        
+    def enter(self):
+        super().enter()
+        # 既に選択された敵の移動を開始
+        if self.selected_enemy and self.target_city:
+            self.execute_enemy_move()
+        else:
+            # 何らかの理由で敵が選択されていない場合はターン終了
+            self.transition_to(TransitionState(self.context))
+    
+    def execute_enemy_move(self):
+        """選択された敵の移動を実行"""
+        current_city = self.context.game_state.get_city_by_id(self.selected_enemy.current_city_id) if self.selected_enemy.current_city_id else None
+        
+        if current_city and self.context.is_cities_connected(current_city, self.target_city):
+            # 接続されているCityにのみ移動可能
+            target_city_id = self.target_city.id
+            self.selected_enemy.target_x = self.target_city.x
+            self.selected_enemy.target_y = self.target_city.y
+            self.selected_enemy.target_city_id = target_city_id
+            self.selected_enemy.is_moving = True
+            self.context.game_state.enemy_moved_this_turn = True
+            self.context.game_state.auto_save()
+            
+            # パトロールAIの場合はインデックスを更新
+            if (self.selected_enemy.ai_type == "patrol" and 
+                target_city_id in self.selected_enemy.patrol_city_ids):
+                self.selected_enemy.patrol_index = self.selected_enemy.patrol_city_ids.index(target_city_id)
+        else:
+            # 移動できない場合はターン終了
+            self.transition_to(TransitionState(self.context))
         
     def update(self):
         # 敵の移動処理
-        for enemy in self.context.game_state.enemies:
-            if enemy.is_moving and enemy.target_x is not None and enemy.target_y is not None:
-                # 移動処理
-                dx = enemy.target_x - enemy.x
-                dy = enemy.target_y - enemy.y
-                distance = (dx * dx + dy * dy) ** 0.5
-                
-                # 移動方向に基づいて向きを更新
-                if abs(dx) > 1:
-                    enemy.facing_right = dx > 0
-                
-                if distance <= enemy.speed:
-                    # 目標地点に到達
-                    enemy.x = enemy.target_x
-                    enemy.y = enemy.target_y
-                    enemy.current_city_id = enemy.target_city_id
-                    enemy.is_moving = False
-                    enemy.target_x = None
-                    enemy.target_y = None
-                    enemy.target_city_id = None
-                    # 敵の移動完了時にTransitionStateに遷移
-                    self.transition_to(TransitionState(self.context))
-                    return self.context
-                else:
-                    # 目標地点に向かって移動
-                    enemy.x += (dx / distance) * enemy.speed
-                    enemy.y += (dy / distance) * enemy.speed
-        
-        # AI処理
-        if self.context.can_move_this_turn():
-            if not any(enemy.is_moving for enemy in self.context.game_state.enemies):
-                self.context.game_state.ai_timer += 1
-                
-                if self.context.game_state.ai_timer >= self.context.game_state.ai_decision_delay:
-                    self.context.execute_enemy_ai_turn()
-                    self.context.game_state.ai_timer = 0
+        if self.selected_enemy and self.selected_enemy.is_moving and self.selected_enemy.target_x is not None and self.selected_enemy.target_y is not None:
+            # 移動処理
+            dx = self.selected_enemy.target_x - self.selected_enemy.x
+            dy = self.selected_enemy.target_y - self.selected_enemy.y
+            distance = (dx * dx + dy * dy) ** 0.5
+            
+            # 移動方向に基づいて向きを更新
+            if abs(dx) > 1:
+                self.selected_enemy.facing_right = dx > 0
+            
+            if distance <= self.selected_enemy.speed:
+                # 目標地点に到達
+                self.selected_enemy.x = self.selected_enemy.target_x
+                self.selected_enemy.y = self.selected_enemy.target_y
+                self.selected_enemy.current_city_id = self.selected_enemy.target_city_id
+                self.selected_enemy.is_moving = False
+                self.selected_enemy.target_x = None
+                self.selected_enemy.target_y = None
+                self.selected_enemy.target_city_id = None
+                # 敵の移動完了時にTransitionStateに遷移
+                self.transition_to(TransitionState(self.context))
+                return self.context
+            else:
+                # 目標地点に向かって移動
+                self.selected_enemy.x += (dx / distance) * self.selected_enemy.speed
+                self.selected_enemy.y += (dy / distance) * self.selected_enemy.speed
         
         return self.context
     
@@ -152,36 +233,6 @@ class EnemyTurnState(MapGameState):
             if not any(enemy.is_moving for enemy in self.context.game_state.enemies):
                 self.transition_to(TransitionState(self.context))
                 return
-        
-        # 敵の手動選択（デバッグ用）
-        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-            self.context.click_x = pyxel.mouse_x
-            self.context.click_y = pyxel.mouse_y
-            self.context.click_timer = 120
-            
-            if self.context.can_move_this_turn():
-                clicked_enemy = self.context.get_enemy_at_position(self.context.click_x, self.context.click_y)
-                clicked_city = self.context.get_city_at_position(self.context.click_x, self.context.click_y)
-                
-                if clicked_enemy:
-                    self.context.selected_enemy = clicked_enemy
-                    self.context.set_camera_follow_target(clicked_enemy)
-                elif clicked_city and self.context.selected_enemy:
-                    # 敵の移動処理
-                    current_city = self.context.game_state.get_city_by_id(self.context.selected_enemy.current_city_id) if self.context.selected_enemy.current_city_id else None
-                    
-                    if current_city and self.context.is_cities_connected(current_city, clicked_city):
-                        clicked_city_id = clicked_city.id
-                        self.context.selected_enemy.target_x = clicked_city.x
-                        self.context.selected_enemy.target_y = clicked_city.y
-                        self.context.selected_enemy.target_city_id = clicked_city_id
-                        self.context.selected_enemy.is_moving = True
-                        self.context.game_state.enemy_moved_this_turn = True
-                        self.context.game_state.auto_save()
-        
-        # ESCキーで選択解除
-        if pyxel.btnp(pyxel.KEY_ESCAPE):
-            self.context.selected_enemy = None
     
     def exit(self):
         pass
@@ -336,7 +387,7 @@ class CutinState(MapGameState):
             if self.next_turn == "player":
                 self.transition_to(PlayerTurnState(self.context))
             else:
-                self.transition_to(EnemyTurnState(self.context))
+                self.transition_to(EnemySelectionState(self.context))
         
         return self.context
     

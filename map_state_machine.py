@@ -6,6 +6,7 @@ class MapStateType(Enum):
     """マップシーンの状態タイプ"""
     PLAYER_TURN = "player_turn"
     ENEMY_TURN = "enemy_turn"
+    ENEMY_SELECTION = "enemy_selection"  # 敵選択演出状態を追加
     TRANSITION = "transition"
     BATTLE_SEQUENCE = "battle_sequence"
     CUTIN = "cutin"
