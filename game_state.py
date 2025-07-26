@@ -195,6 +195,7 @@ class GameState:
         self.player_moved_this_turn = False
         self.enemy_moved_this_turn = False
         self.ai_timer = 0
+        self.ai_decision_delay = 60
         self.current_ai_enemy_index: Optional[int] = None
         
         # ゲーム状態ファイルのパス
@@ -300,6 +301,7 @@ class GameState:
             'player_moved_this_turn': self.player_moved_this_turn,
             'enemy_moved_this_turn': self.enemy_moved_this_turn,
             'ai_timer': self.ai_timer,
+            'ai_decision_delay': self.ai_decision_delay,
             'current_ai_enemy_index': self.current_ai_enemy_index
         }
     
@@ -324,6 +326,7 @@ class GameState:
         self.player_moved_this_turn = data['player_moved_this_turn']
         self.enemy_moved_this_turn = data['enemy_moved_this_turn']
         self.ai_timer = data.get('ai_timer', 0)
+        self.ai_decision_delay = data.get('ai_decision_delay', 60)
         self.current_ai_enemy_index = data.get('current_ai_enemy_index')
     
     def save_to_file(self):
@@ -394,10 +397,9 @@ class GameState:
         return battle_results
     
     def execute_battle(self, city_id: int, players: List[Player], enemies: List[Enemy]) -> Dict[str, Any]:
-        """指定した都市での戦闘を計算（実際のライフ減少は行わない）"""
+        """指定した都市での戦闘を実行"""
         battle_log = []
         city_name = self.get_city_display_name(city_id)
-        battle_actions = []
         
         # プレイヤーの攻撃フェーズ
         total_player_attack = sum(p.attack for p in players)
@@ -405,17 +407,8 @@ class GameState:
             # 最も弱い敵から攻撃
             target_enemy = min(enemies, key=lambda e: e.life)
             damage = min(total_player_attack, target_enemy.life)
+            target_enemy.life -= damage
             battle_log.append(f"Players dealt {damage} damage to {target_enemy.ai_type} enemy in {city_name}")
-            
-            # 戦闘アクションを記録（実際の適用は後で）
-            battle_actions.append({
-                'type': 'damage',
-                'target_type': 'enemy',
-                'target_city_id': city_id,
-                'target_ai_type': target_enemy.ai_type,
-                'target_life': target_enemy.life,  # 識別用
-                'damage': damage
-            })
         
         # 敵の攻撃フェーズ
         total_enemy_attack = sum(e.attack for e in enemies)
@@ -423,57 +416,15 @@ class GameState:
             # 最も弱いプレイヤーから攻撃
             target_player = min(players, key=lambda p: p.life)
             damage = min(total_enemy_attack, target_player.life)
+            target_player.life -= damage
             battle_log.append(f"Enemies dealt {damage} damage to player in {city_name}")
-            
-            # 戦闘アクションを記録（実際の適用は後で）
-            battle_actions.append({
-                'type': 'damage',
-                'target_type': 'player',
-                'target_city_id': city_id,
-                'target_life': target_player.life,  # 識別用
-                'damage': damage
-            })
         
         return {
             'city_id': city_id,
             'log': battle_log,
             'players_before': len(players),
-            'enemies_before': len(enemies),
-            'battle_actions': battle_actions
+            'enemies_before': len(enemies)
         }
-    
-    def apply_battle_result(self, battle_result: Dict[str, Any]):
-        """戦闘結果を実際に適用（HPの減少とユニットの削除）"""
-        if 'battle_actions' not in battle_result:
-            return
-        
-        city_id = battle_result['city_id']
-        
-        # 戦闘アクションを適用
-        for action in battle_result['battle_actions']:
-            if action['type'] == 'damage':
-                target_type = action['target_type']
-                target_city_id = action['target_city_id']
-                damage = action['damage']
-                
-                if target_type == 'player':
-                    # 指定された都市にいるプレイヤーの中で最も弱いプレイヤーを探す
-                    players_in_city = [p for p in self.players if p.current_city_id == target_city_id]
-                    if players_in_city:
-                        target_player = min(players_in_city, key=lambda p: p.life)
-                        target_player.life -= damage
-                
-                elif target_type == 'enemy':
-                    # 指定された都市にいる敵の中で最も弱い敵を探す
-                    enemies_in_city = [e for e in self.enemies if e.current_city_id == target_city_id]
-                    if enemies_in_city:
-                        target_enemy = min(enemies_in_city, key=lambda e: e.life)
-                        target_enemy.life -= damage
-    
-    def apply_multiple_battle_results(self, battle_results: List[Dict[str, Any]]):
-        """複数の戦闘結果を順次適用"""
-        for battle_result in battle_results:
-            self.apply_battle_result(battle_result)
     
     def remove_defeated_characters(self):
         """lifeが0以下のキャラクターを削除"""

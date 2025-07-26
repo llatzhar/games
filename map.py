@@ -444,19 +444,8 @@ class MapScene(Scene):
         """戦闘シーケンスを開始"""
         if not battle_locations:
             return
-        
-        # 戦闘情報から実際の戦闘結果を計算
-        battle_results = []
-        for battle_info in battle_locations:
-            city_id = battle_info['city_id']
-            players = battle_info['players']
-            enemies = battle_info['enemies']
             
-            # 実際の戦闘計算を実行
-            battle_result = self.game_state.execute_battle(city_id, players, enemies)
-            battle_results.append(battle_result)
-        
-        self.pending_battle_results = battle_results
+        self.pending_battle_results = battle_locations
         self.current_battle_index = 0
         self.is_processing_battles = True
         
@@ -499,24 +488,13 @@ class MapScene(Scene):
     
     def start_current_battle_scene(self):
         """現在の戦闘のBattleSubSceneを開始"""
-        current_battle_result = self.pending_battle_results[self.current_battle_index]
-        city_id = current_battle_result['city_id']
+        current_battle = self.pending_battle_results[self.current_battle_index]
+        city_id = current_battle['city_id']
         city = self.game_state.get_city_by_id(city_id)
         
         if city:
-            # 戦闘結果から戦闘情報を再構築
-            players_in_city, enemies_in_city = self.game_state.get_characters_in_city(city_id)
-            battle_info = {
-                'city_id': city_id,
-                'players': players_in_city,
-                'enemies': enemies_in_city,
-                'players_before': current_battle_result['players_before'],
-                'enemies_before': current_battle_result['enemies_before'],
-                'battle_result': current_battle_result  # 戦闘結果も含める
-            }
-            
             # BattleSubSceneを開始
-            battle_sub_scene = BattleSubScene(self, battle_info, city)
+            battle_sub_scene = BattleSubScene(self, current_battle, city)
             self.set_sub_scene(battle_sub_scene)
     
     def on_battle_scene_finished(self):
@@ -533,16 +511,11 @@ class MapScene(Scene):
     def finish_battle_sequence(self):
         """戦闘シーケンスを終了"""
         self.is_processing_battles = False
-        
-        # 戦闘結果を適用（HPの減少）
-        self.game_state.apply_multiple_battle_results(self.pending_battle_results)
+        self.pending_battle_results = []
+        self.current_battle_index = 0
         
         # 戦闘シーケンス完了後に倒されたキャラクターを削除
         self.game_state.remove_defeated_characters()
-        
-        # 戦闘結果をクリア
-        self.pending_battle_results = []
-        self.current_battle_index = 0
         
         # ターン切り替えのカットインを表示
         if self.game_state.current_turn == "player":
@@ -579,11 +552,6 @@ class MapScene(Scene):
             self.game_state.ai_timer = 0  # AIタイマーをリセット
             # エネミーターンからプレイヤーターンに切り替わる際はカメラ追従をクリア
             self.clear_camera_follow()
-            # 敵選択演出の状態をリセット
-            if hasattr(self, 'enemy_selection_timer'):
-                delattr(self, 'enemy_selection_timer')
-            if hasattr(self, 'enemy_selection_target'):
-                delattr(self, 'enemy_selection_target')
         
         # 戦闘がある場合は戦闘シーケンスを開始
         if battle_locations:
@@ -996,25 +964,6 @@ class MapScene(Scene):
                         # 左右の線
                         pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
                         pyxel.rect(frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color)
-                
-                # 敵選択演出中の点滅表示
-                if (hasattr(self, 'enemy_selection_target') and enemy == self.enemy_selection_target and 
-                    self.game_state.current_turn == "enemy"):
-                    # 高速点滅効果（0.5秒間で2回点滅）
-                    if (pyxel.frame_count // 4) % 2 == 0:
-                        frame_color = 10  # 黄色
-                        
-                        # 枠線を描画
-                        frame_x = int(enemy_screen_x - half_width - 2)
-                        frame_y = int(enemy_screen_y - half_height - 2)
-                        frame_w = enemy.width + 4
-                        frame_h = enemy.height + 4
-                        
-                        # 太い枠線を描画
-                        pyxel.rect(frame_x, frame_y, frame_w, 2, frame_color)
-                        pyxel.rect(frame_x, frame_y + frame_h - 2, frame_w, 2, frame_color)
-                        pyxel.rect(frame_x, frame_y, 2, frame_h, frame_color)
-                        pyxel.rect(frame_x + frame_w - 2, frame_y, 2, frame_h, frame_color)
         # UI表示
         # ホバー情報の表示（最優先で表示）
         mouse_x = pyxel.mouse_x
@@ -1176,7 +1125,7 @@ class MapScene(Scene):
             
             # AI情報を表示（エネミーターン時）
             if self.game_state.current_turn == "enemy":
-                ai_info = f"AI Timer: {self.game_state.ai_timer}"
+                ai_info = f"AI Timer: {self.game_state.ai_timer}/{self.game_state.ai_decision_delay}"
                 pyxel.text(5, legend_y - 20, ai_info, 8)
             
             # 戦闘処理状態を表示
@@ -1200,48 +1149,3 @@ class MapScene(Scene):
                      legend_y - 30 if (self.is_processing_battles or self.game_state.current_turn == "enemy") else \
                      legend_y - 20
             pyxel.text(5, mouse_y, mouse_text, 10)
-
-    def start_enemy_selection_effect(self):
-        """敵選択演出を開始"""
-        # まだ移動していない敵を選択
-        available_enemies = [enemy for enemy in self.game_state.enemies if not enemy.is_moving]
-        if not available_enemies:
-            return
-        
-        # ランダムに敵を選択
-        selected_enemy = random.choice(available_enemies)
-        selected_enemy_index = self.game_state.enemies.index(selected_enemy)
-        
-        # 選択演出用の変数を設定
-        self.enemy_selection_target = selected_enemy
-        self.enemy_selection_timer = 30  # 0.5秒 (30fps * 0.5秒)
-        self.game_state.current_ai_enemy_index = selected_enemy_index  # 現在AI処理中の敵を記録
-        
-        # 敵を選択時にカメラ追従を設定
-        self.set_camera_follow_target(selected_enemy)
-    
-    def finish_enemy_selection_effect(self):
-        """敵選択演出を終了して移動を実行"""
-        if not hasattr(self, 'enemy_selection_target'):
-            return
-            
-        selected_enemy = self.enemy_selection_target
-        
-        # AIに基づいて移動先を決定
-        target_city = self.decide_enemy_action(selected_enemy)
-        
-        if target_city:
-            target_city_id = target_city.id
-            if self.game_state.are_cities_connected(selected_enemy.current_city_id, target_city_id):
-                # 移動実行
-                selected_enemy.target_x = target_city.x
-                selected_enemy.target_y = target_city.y
-                selected_enemy.target_city_id = target_city_id  # 内部IDを設定
-                selected_enemy.is_moving = True
-                self.game_state.enemy_moved_this_turn = True
-            
-            # パトロールAIの場合はインデックスを更新
-            if selected_enemy.ai_type == "patrol" and target_city_id in selected_enemy.patrol_city_ids:
-                selected_enemy.patrol_index = selected_enemy.patrol_city_ids.index(target_city_id)
-        
-        self.game_state.current_ai_enemy_index = None  # AI処理完了
