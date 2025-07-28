@@ -3,6 +3,9 @@
 ## 概要
 Pyxelライブラリを使用したターンベース戦略ゲームです。プレイヤーと敵AIが交互に行動し、都市間を移動して戦略的な位置取りを行います。
 
+[![Tests](https://github.com/llatzhar/games/actions/workflows/test.yml/badge.svg)](https://github.com/llatzhar/games/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/llatzhar/games/branch/main/graph/badge.svg)](https://codecov.io/gh/llatzhar/games)
+
 ## 機能
 
 ### 基本システム
@@ -514,5 +517,129 @@ class MapScene(Scene):
 - より複雑なマップレイアウト
 - 戦闘システムの実装
 - マルチプレイヤー対応
+
+## 開発・テスト
+
+### テストの実行
+
+#### 基本的なテスト実行
+```bash
+# 全テストを実行
+python -m unittest discover -s . -p "test_*.py"
+
+# 詳細出力で実行
+python -m unittest discover -s . -p "test_*.py" -v
+
+# 特定のテストクラスのみ実行
+python -m unittest test_game_state.TestCity
+
+# 特定のテストメソッドのみ実行
+python -m unittest test_game_state.TestCity.test_city_creation
+```
+
+#### カバレッジ付きテスト実行
+```bash
+# カバレッジ付きでテストを実行
+coverage run -m unittest discover -s . -p "test_*.py"
+
+# カバレッジレポートを表示
+coverage report -m
+
+# HTMLレポートを生成
+coverage html
+```
+
+#### 便利なスクリプト
+
+**Windows (PowerShell):**
+```powershell
+# 依存関係のインストール
+.\test.ps1 install
+
+# テスト実行
+.\test.ps1 test
+
+# カバレッジ付きテスト
+.\test.ps1 test-coverage
+
+# コードフォーマット
+.\test.ps1 format
+
+# リンティング
+.\test.ps1 lint
+```
+
+**Linux/macOS (Make):**
+```bash
+# 依存関係のインストール
+make install
+
+# テスト実行
+make test
+
+# カバレッジ付きテスト
+make test-coverage
+
+# コードフォーマット
+make format
+
+# リンティング
+make lint
+```
+
+### CI/CDパイプライン
+
+このプロジェクトはGitHub Actionsを使用して自動テストとコード品質チェックを実行します：
+
+#### 自動実行されるチェック
+- **テスト実行**: Python 3.8, 3.9, 3.10, 3.11での単体テスト
+- **コードカバレッジ**: カバレッジレポートの生成とCodecovへのアップロード
+- **コード品質**:
+  - `flake8`によるリンティング
+  - `black`によるコードフォーマットチェック
+  - `isort`によるインポート順序チェック
+
+#### トリガー条件
+- `main`、`develop`ブランチへのプッシュ
+- `main`ブランチに対するプルリクエスト
+
+#### 設定ファイル
+- `.github/workflows/test.yml`: GitHub Actionsワークフロー設定
+- `pyproject.toml`: コード品質ツールの設定
+- `requirements.txt`: 開発依存関係
+
+### コード品質
+
+#### フォーマッティング
+- **Black**: コードフォーマッター（行長88文字）
+- **isort**: インポート文の並び替え
+
+#### リンティング
+- **flake8**: PEP8準拠チェックとコード品質検査
+
+#### 推奨する開発フロー
+1. コードを書く
+2. フォーマットを適用: `.\test.ps1 format` または `make format`
+3. リンティングチェック: `.\test.ps1 lint` または `make lint`
+4. テスト実行: `.\test.ps1 test` または `make test`
+5. カバレッジ確認: `.\test.ps1 test-coverage` または `make test-coverage`
+6. コミット・プッシュ
+
+### テスト構成
+
+#### テストファイル
+- `test_game_state.py`: ゲーム状態管理のテスト
+- `run_tests.py`: テストランナー（詳細出力、特定テスト実行対応）
+
+#### テスト対象
+- **City**: 都市オブジェクトの作成、シリアライゼーション、ホバー情報
+- **Road**: 道路オブジェクトの作成、シリアライゼーション
+- **Player**: プレイヤーオブジェクトの作成、ステータス、移動
+- **Enemy**: 敵オブジェクトの作成、AIタイプ、行動パターン
+- **GameState**: ゲーム全体の状態管理、ファイル保存/読み込み、戦闘システム
+
+#### カバレッジ目標
+- 全体カバレッジ: 90%以上
+- 重要なクラス（GameState, Player, Enemy）: 95%以上
 - AI学習機能の追加
 

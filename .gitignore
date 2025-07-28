@@ -172,3 +172,15 @@ Thumbs.db
 
 # Game save files
 saves/
+
+# Test and coverage files
+.pytest_cache/
+coverage_html/
+htmlcov/
+.coverage.*
+coverage.xml
+
+# Code quality tools
+.flake8
+.black
+.isort.cfg
