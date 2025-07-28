@@ -28,7 +28,7 @@ known_first_party = ["game_state", "battle", "cutin", "hover_info", "map", "map_
 [tool.coverage.run]
 source = ["."]
 omit = [
-    "test_*.py",
+    "tests/*",
     "*/__pycache__/*",
     "*/tests/*",
     "setup.py",

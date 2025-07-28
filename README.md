@@ -525,22 +525,22 @@ class MapScene(Scene):
 #### 基本的なテスト実行
 ```bash
 # 全テストを実行
-python -m unittest discover -s . -p "test_*.py"
+python -m unittest discover -s tests -p "test_*.py"
 
 # 詳細出力で実行
-python -m unittest discover -s . -p "test_*.py" -v
+python -m unittest discover -s tests -p "test_*.py" -v
 
 # 特定のテストクラスのみ実行
-python -m unittest test_game_state.TestCity
+python -m unittest tests.test_game_state.TestCity
 
 # 特定のテストメソッドのみ実行
-python -m unittest test_game_state.TestCity.test_city_creation
+python -m unittest tests.test_game_state.TestCity.test_city_creation
 ```
 
 #### カバレッジ付きテスト実行
 ```bash
 # カバレッジ付きでテストを実行
-coverage run -m unittest discover -s . -p "test_*.py"
+coverage run -m unittest discover -s tests -p "test_*.py"
 
 # カバレッジレポートを表示
 coverage report -m
@@ -628,8 +628,8 @@ make lint
 ### テスト構成
 
 #### テストファイル
-- `test_game_state.py`: ゲーム状態管理のテスト
-- `run_tests.py`: テストランナー（詳細出力、特定テスト実行対応）
+- `tests/test_game_state.py`: ゲーム状態管理のテスト
+- `tests/run_tests.py`: テストランナー（詳細出力、特定テスト実行対応）
 
 #### テスト対象
 - **City**: 都市オブジェクトの作成、シリアライゼーション、ホバー情報

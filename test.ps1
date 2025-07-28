@@ -27,20 +27,58 @@ function Install-Dependencies {
 
 function Run-Tests {
     Write-Host "テストを実行中..." -ForegroundColor Blue
-    python -m unittest discover -s . -p "test_*.py"
+    
+    if (-not (Test-Command "python")) {
+        Write-Host "エラー: Pythonがインストールされていません。" -ForegroundColor Red
+        return
+    }
+    
+    try {
+        python -m unittest discover -s tests -p "test_*.py"
+        Write-Host "テストが完了しました。" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "エラー: テストの実行に失敗しました。" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+    }
 }
 
 function Run-TestsVerbose {
     Write-Host "詳細出力でテストを実行中..." -ForegroundColor Blue
-    python -m unittest discover -s . -p "test_*.py" -v
+    
+    if (-not (Test-Command "python")) {
+        Write-Host "エラー: Pythonがインストールされていません。" -ForegroundColor Red
+        return
+    }
+    
+    try {
+        python -m unittest discover -s tests -p "test_*.py" -v
+        Write-Host "詳細テストが完了しました。" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "エラー: テストの実行に失敗しました。" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+    }
 }
 
 function Run-TestsCoverage {
     Write-Host "カバレッジ付きでテストを実行中..." -ForegroundColor Blue
-    coverage run -m unittest discover -s . -p "test_*.py"
-    coverage report -m
-    coverage html
-    Write-Host "HTMLカバレッジレポートが htmlcov/ に生成されました" -ForegroundColor Green
+    
+    if (-not (Test-Command "coverage")) {
+        Write-Host "警告: coverage がインストールされていません。pip install coverage でインストールしてください。" -ForegroundColor Yellow
+        return
+    }
+    
+    try {
+        coverage run -m unittest discover -s tests -p "test_*.py"
+        coverage report -m
+        coverage html
+        Write-Host "HTMLカバレッジレポートが htmlcov/ に生成されました" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "エラー: カバレッジテストの実行に失敗しました。" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+    }
 }
 
 function Run-Lint {

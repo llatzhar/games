@@ -2,6 +2,11 @@ import unittest
 import os
 import json
 import tempfile
+import sys
+
+# テストファイルからプロジェクトルートのモジュールをインポートできるようにする
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from game_state import GameState, City, Road, Player, Enemy
 
 class TestCity(unittest.TestCase):

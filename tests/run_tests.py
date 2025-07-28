@@ -3,15 +3,19 @@
 ゲーム状態管理のテストランナー
 
 使用方法:
-    python run_tests.py              # 全テストを実行
-    python run_tests.py -v           # 詳細出力で実行
-    python run_tests.py TestCity     # 特定のテストクラスのみ実行
-    python run_tests.py TestGameState.test_battle_detection  # 特定のテストメソッドのみ実行
+    python tests/run_tests.py              # 全テストを実行
+    python tests/run_tests.py -v           # 詳細出力で実行
+    python tests/run_tests.py TestCity     # 特定のテストクラスのみ実行
+    python tests/run_tests.py TestGameState.test_battle_detection  # 特定のテストメソッドのみ実行
 """
 
 import unittest
 import sys
 import os
+
+# プロジェクトルートをPythonパスに追加
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 def run_tests():
     """テストを実行する"""
@@ -44,7 +48,9 @@ def run_tests():
     else:
         # 全テストを実行
         verbosity = 1
-        suite = loader.discover('.', pattern='test_*.py')
+        # testsディレクトリ内からテストを検索
+        tests_dir = os.path.dirname(os.path.abspath(__file__))
+        suite = loader.discover(tests_dir, pattern='test_*.py')
     
     # テストランナーの作成と実行
     runner = unittest.TextTestRunner(verbosity=verbosity)
@@ -81,8 +87,9 @@ def run_coverage():
     try:
         import coverage
         
-        # カバレッジの設定
-        cov = coverage.Coverage(source=['game_state'])
+        # カバレッジの設定 - プロジェクトルートのソースコードを対象にする
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cov = coverage.Coverage(source=[project_root], omit=['tests/*', '*/__pycache__/*'])
         cov.start()
         
         # テスト実行

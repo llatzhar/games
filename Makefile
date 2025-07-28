@@ -19,13 +19,13 @@ install:
 
 # テスト実行
 test:
-	python -m unittest discover -s . -p "test_*.py"
+	python -m unittest discover -s tests -p "test_*.py"
 
 test-verbose:
-	python -m unittest discover -s . -p "test_*.py" -v
+	python -m unittest discover -s tests -p "test_*.py" -v
 
 test-coverage:
-	coverage run -m unittest discover -s . -p "test_*.py"
+	coverage run -m unittest discover -s tests -p "test_*.py"
 	coverage report -m
 	coverage html
 

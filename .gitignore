@@ -179,6 +179,8 @@ coverage_html/
 htmlcov/
 .coverage.*
 coverage.xml
+tests/__pycache__/
+tests/*.pyc
 
 # Code quality tools
 .flake8

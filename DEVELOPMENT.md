@@ -16,7 +16,7 @@ pip install -r requirements.txt
 make test
 
 # Or directly with Python
-python -m unittest discover -s . -p "test_*.py" -v
+python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 ### 3. Check Code Quality
