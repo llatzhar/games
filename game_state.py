@@ -2,6 +2,8 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
+from coordinate_utils import create_default_coordinate_transformer
+
 
 class City:
     def __init__(self, id: int, name: str, x: float, y: float):
@@ -236,45 +238,56 @@ class GameState:
         os.makedirs(os.path.dirname(self.save_file_path), exist_ok=True)
 
     def initialize_default_state(self):
-        """デフォルトのゲーム状態を初期化"""
-        tile_size = 16
+        """デフォルトのゲーム状態を初期化（中央座標系）"""
+        # 座標変換器を使用
+        coord_transformer = create_default_coordinate_transformer()
 
-        # 都市を作成（整数IDを使用）
+        # 都市を作成（中央座標系を使用）
         self.cities = {
-            1: City(1, "Kiyosu", 2 * tile_size, 2 * tile_size),
-            2: City(2, "Nagoya", 7 * tile_size, 2 * tile_size),
-            3: City(3, "Sakai", 2 * tile_size, 6 * tile_size),
-            4: City(4, "Yamato", 7 * tile_size, 6 * tile_size),
-            5: City(5, "Tutujigaoka", 12 * tile_size, 2 * tile_size),
-            6: City(6, "Iwabuti", 12 * tile_size, 6 * tile_size),
+            1: City(
+                1, "Central", *coord_transformer.tile_to_pixel(0, 0)
+            ),  # タイル(0,0) → 物理座標(256,256)
+            2: City(
+                2, "West", *coord_transformer.tile_to_pixel(-1, 2)
+            ),  # タイル(-1,2) → 物理座標(224,320)
+            3: City(
+                3, "East", *coord_transformer.tile_to_pixel(1, 2)
+            ),  # タイル(1,2) → 物理座標(288,320)
+            4: City(
+                4, "North", *coord_transformer.tile_to_pixel(0, -2)
+            ),  # タイル(0,-2) → 物理座標(256,192)
+            5: City(
+                5, "South", *coord_transformer.tile_to_pixel(0, 3)
+            ),  # タイル(0,3) → 物理座標(256,352)
+            6: City(
+                6, "Northeast", *coord_transformer.tile_to_pixel(2, -1)
+            ),  # タイル(2,-1) → 物理座標(320,224)
         }
 
         # 道路を作成（都市IDを使用）
         self.roads = [
-            Road(1, 2),  # Kiyosu - Nagoya
-            Road(2, 5),  # Nagoya - Tutujigaoka
-            Road(1, 3),  # Kiyosu - Sakai
-            Road(3, 4),  # Sakai - Yamato
-            Road(4, 6),  # Yamato - Iwabuti
-            Road(2, 4),  # Nagoya - Yamato
-            Road(5, 6),  # Tutujigaoka - Iwabuti
-            Road(1, 4),  # Kiyosu - Yamato
-            Road(2, 6),  # Nagoya - Iwabuti
+            Road(1, 2),  # Central - West
+            Road(1, 3),  # Central - East
+            Road(1, 4),  # Central - North
+            Road(1, 5),  # Central - South
+            Road(2, 5),  # West - South
+            Road(3, 5),  # East - South
+            Road(3, 6),  # East - Northeast
+            Road(4, 6),  # North - Northeast
         ]
 
-        # プレイヤーを作成
+        # プレイヤーを作成（タイル(0,0)とタイル(-1,2)に配置）
         self.players = [
-            Player(self.cities[1].x, self.cities[1].y, 1),  # Kiyosu
-            Player(self.cities[3].x, self.cities[3].y, 3),  # Sakai
+            Player(self.cities[1].x, self.cities[1].y, 1),  # Central (0,0)
+            Player(self.cities[2].x, self.cities[2].y, 2),  # West (-1,2)
         ]
-        # 敵を作成
-        enemy1 = Enemy(
-            self.cities[5].x, self.cities[5].y, 5, "aggressive", 1
-        )  # Tutujigaoka
-        enemy2 = Enemy(self.cities[6].x, self.cities[6].y, 6, "patrol", 2)  # Iwabuti
-        enemy2.patrol_city_ids = [6, 4, 2, 5]  # Iwabuti - Yamato - Nagoya - Tutujigaoka
 
-        self.enemies = [enemy1, enemy2]
+        # 敵を作成（タイル(1,2)に1体配置）
+        enemy1 = Enemy(
+            self.cities[3].x, self.cities[3].y, 3, "aggressive", 1
+        )  # East (1,2)
+
+        self.enemies = [enemy1]
 
     def get_city_by_id(self, city_id: int) -> Optional[City]:
         """IDで都市を取得"""

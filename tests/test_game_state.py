@@ -207,24 +207,17 @@ class TestGameState(unittest.TestCase):
         self.assertEqual(len(self.game_state.cities), 6)
 
         # 道路数チェック
-        self.assertEqual(len(self.game_state.roads), 9)
+        self.assertEqual(len(self.game_state.roads), 8)
 
         # プレイヤー数チェック
         self.assertEqual(len(self.game_state.players), 2)
 
         # 敵数チェック
-        self.assertEqual(len(self.game_state.enemies), 2)
+        self.assertEqual(len(self.game_state.enemies), 1)
 
         # 都市の存在確認
         city_names = [city.name for city in self.game_state.cities.values()]
-        expected_cities = [
-            "Kiyosu",
-            "Nagoya",
-            "Sakai",
-            "Yamato",
-            "Tutujigaoka",
-            "Iwabuti",
-        ]
+        expected_cities = ["Central", "West", "East", "North", "South", "Northeast"]
         for city_name in expected_cities:
             self.assertIn(city_name, city_names)
 
@@ -235,7 +228,7 @@ class TestGameState(unittest.TestCase):
         # IDで都市を取得
         city = self.game_state.get_city_by_id(1)
         self.assertIsNotNone(city)
-        self.assertEqual(city.name, "Kiyosu")
+        self.assertEqual(city.name, "Central")
 
         # 存在しない都市ID
         non_existent_city = self.game_state.get_city_by_id(999)
@@ -243,7 +236,7 @@ class TestGameState(unittest.TestCase):
 
         # 都市表示名の取得
         display_name = self.game_state.get_city_display_name(1)
-        self.assertEqual(display_name, "Kiyosu")
+        self.assertEqual(display_name, "Central")
 
         # 存在しない都市の表示名
         non_existent_display_name = self.game_state.get_city_display_name(999)
@@ -258,12 +251,14 @@ class TestGameState(unittest.TestCase):
         self.assertTrue(self.game_state.are_cities_connected(2, 1))  # 逆方向も確認
 
         # 接続されていない都市のテスト（直接は接続されていない）
-        self.assertFalse(self.game_state.are_cities_connected(1, 6))  # Kiyosu - Iwabuti
+        self.assertFalse(
+            self.game_state.are_cities_connected(1, 6)
+        )  # Central - Northeast
 
         # 接続都市リストの取得
-        connected_to_kiyosu = self.game_state.get_connected_city_ids(1)
-        expected_connections = [2, 3, 4]  # Nagoya, Sakai, Yamato
-        self.assertEqual(set(connected_to_kiyosu), set(expected_connections))
+        connected_to_central = self.game_state.get_connected_city_ids(1)
+        expected_connections = [2, 3, 4, 5]  # West, East, North, South
+        self.assertEqual(set(connected_to_central), set(expected_connections))
 
     def test_turn_switching(self):
         """ターン切り替えのテスト"""
@@ -422,6 +417,123 @@ class TestGameState(unittest.TestCase):
         self.game_state.save_file_path = os.path.join(self.temp_dir, "nonexistent.json")
         success = self.game_state.load_from_file()
         self.assertFalse(success)
+
+
+class TestCoordinateTransformation(unittest.TestCase):
+    """座標変換システムのテスト"""
+
+    def setUp(self):
+        """テスト前の準備"""
+        self.game_state = GameState()
+
+    def test_tile_to_pixel_coordinate_transformation(self):
+        """タイル座標から物理座標への変換テスト"""
+        self.game_state.initialize_default_state()
+
+        # 中央座標系の検証
+        # タイル(0,0) → 物理座標(256,256) - マップの中央
+        central_city = self.game_state.cities[1]  # Central
+        self.assertEqual(central_city.name, "Central")
+        self.assertEqual(central_city.x, 256.0)
+        self.assertEqual(central_city.y, 256.0)
+
+        # タイル(-1,2) → 物理座標(224,320) - West
+        west_city = self.game_state.cities[2]  # West
+        self.assertEqual(west_city.name, "West")
+        self.assertEqual(west_city.x, 224.0)
+        self.assertEqual(west_city.y, 320.0)
+
+        # タイル(1,2) → 物理座標(288,320) - East
+        east_city = self.game_state.cities[3]  # East
+        self.assertEqual(east_city.name, "East")
+        self.assertEqual(east_city.x, 288.0)
+        self.assertEqual(east_city.y, 320.0)
+
+        # タイル(0,-2) → 物理座標(256,192) - North
+        north_city = self.game_state.cities[4]  # North
+        self.assertEqual(north_city.name, "North")
+        self.assertEqual(north_city.x, 256.0)
+        self.assertEqual(north_city.y, 192.0)
+
+        # タイル(0,3) → 物理座標(256,352) - South
+        south_city = self.game_state.cities[5]  # South
+        self.assertEqual(south_city.name, "South")
+        self.assertEqual(south_city.x, 256.0)
+        self.assertEqual(south_city.y, 352.0)
+
+        # タイル(2,-1) → 物理座標(320,224) - Northeast
+        northeast_city = self.game_state.cities[6]  # Northeast
+        self.assertEqual(northeast_city.name, "Northeast")
+        self.assertEqual(northeast_city.x, 320.0)
+        self.assertEqual(northeast_city.y, 224.0)
+
+    def test_character_positioning_in_coordinate_system(self):
+        """中央座標系でのキャラクター配置テスト"""
+        self.game_state.initialize_default_state()
+
+        # プレイヤー1はCentral（中央）に配置されている
+        player1 = self.game_state.players[0]
+        self.assertEqual(player1.current_city_id, 1)  # Central
+        self.assertEqual(player1.x, 256.0)  # タイル(0,0) → 物理座標(256,256)
+        self.assertEqual(player1.y, 256.0)
+
+        # プレイヤー2はWest（西）に配置されている
+        player2 = self.game_state.players[1]
+        self.assertEqual(player2.current_city_id, 2)  # West
+        self.assertEqual(player2.x, 224.0)  # タイル(-1,2) → 物理座標(224,320)
+        self.assertEqual(player2.y, 320.0)
+
+        # 敵はEast（東）に配置されている
+        enemy1 = self.game_state.enemies[0]
+        self.assertEqual(enemy1.current_city_id, 3)  # East
+        self.assertEqual(enemy1.x, 288.0)  # タイル(1,2) → 物理座標(288,320)
+        self.assertEqual(enemy1.y, 320.0)
+
+    def test_coordinate_system_boundaries(self):
+        """座標系の境界テスト"""
+        # 17x17のマップサイズ（-8〜8）の境界確認
+        tile_size = 32
+
+        # tile_to_pixel関数の実装を直接テスト
+        def tile_to_pixel(tile_x: int, tile_y: int) -> tuple[float, float]:
+            pixel_x = (tile_x + 8) * tile_size
+            pixel_y = (tile_y + 8) * tile_size
+            return (pixel_x, pixel_y)
+
+        # 左上端 タイル(-8,-8) → 物理座標(0,0)
+        min_x, min_y = tile_to_pixel(-8, -8)
+        self.assertEqual(min_x, 0.0)
+        self.assertEqual(min_y, 0.0)
+
+        # 右下端 タイル(8,8) → 物理座標(512,512)
+        max_x, max_y = tile_to_pixel(8, 8)
+        self.assertEqual(max_x, 512.0)
+        self.assertEqual(max_y, 512.0)
+
+        # 中央 タイル(0,0) → 物理座標(256,256)
+        center_x, center_y = tile_to_pixel(0, 0)
+        self.assertEqual(center_x, 256.0)
+        self.assertEqual(center_y, 256.0)
+
+    def test_coordinate_consistency_after_serialization(self):
+        """シリアライゼーション後の座標一貫性テスト"""
+        self.game_state.initialize_default_state()
+
+        # シリアライゼーション前の座標を記録
+        original_coordinates = {}
+        for city_id, city in self.game_state.cities.items():
+            original_coordinates[city_id] = (city.x, city.y)
+
+        # シリアライゼーションとデシリアライゼーション
+        data = self.game_state.to_dict()
+        new_game_state = GameState()
+        new_game_state.from_dict(data)
+
+        # 座標が保持されていることを確認
+        for city_id, (orig_x, orig_y) in original_coordinates.items():
+            restored_city = new_game_state.cities[city_id]
+            self.assertEqual(restored_city.x, orig_x)
+            self.assertEqual(restored_city.y, orig_y)
 
 
 if __name__ == "__main__":

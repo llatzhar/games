@@ -3,6 +3,7 @@ import random
 import pyxel
 
 from battle import BattleSubScene
+from coordinate_utils import create_default_coordinate_transformer
 from cutin import CutinSubScene
 
 # game.pyから定数をインポート
@@ -54,12 +55,18 @@ class MapScene(Scene):
         # マウスカーソルを表示
         pyxel.mouse(True)
 
-        # 30x30のマップデータを生成
-        self.map_width = 30
-        self.map_height = 30
-        self.map_data = self.generate_30x30_map()
+        # 座標変換器を初期化
+        self.coord_transformer = create_default_coordinate_transformer()
 
-        self.tile_size = 16
+        # 座標変換器からマップ設定を取得
+        self.map_width = self.coord_transformer.map_width
+        self.map_height = self.coord_transformer.map_height
+        self.tile_size = self.coord_transformer.tile_size
+        self.tile_offset_x = self.coord_transformer.tile_offset_x
+        self.tile_offset_y = self.coord_transformer.tile_offset_y
+
+        # 30x30のマップデータを生成（中央座標系対応）
+        self.map_data = self.generate_centered_map()
 
         # マップ全体のピクセルサイズ
         self.map_pixel_width = self.map_width * self.tile_size
@@ -75,25 +82,59 @@ class MapScene(Scene):
         # シーン遷移用
         self.next_scene = None
 
-    def generate_30x30_map(self):
-        """30x30のマップを生成"""
+    def generate_centered_map(self):
+        """17x17の中央座標系マップを生成（タイル座標-8〜8）"""
         map_data = []
-        for row in range(30):
+        for row in range(17):  # マップ配列インデックス0〜16
             map_row = []
-            for col in range(30):
-                # 外周は壁
-                if row == 0 or row == 29 or col == 0 or col == 29:
+            for col in range(17):  # マップ配列インデックス0〜16
+                # マップ配列インデックスをタイル座標に変換
+                tile_x = col - 8  # -8 〜 8
+                tile_y = row - 8  # -8 〜 8
+
+                # 外周は壁（タイル座標-8, 8の境界）
+                if tile_x == -8 or tile_x == 8 or tile_y == -8 or tile_y == 8:
                     map_row.append(1)
-                # 内部にランダムに壁を配置
-                elif (row % 4 == 0 and col % 4 == 0) or (row % 6 == 2 and col % 6 == 2):
+                # 内部にランダムに壁を配置（中央座標系のパターン）
+                elif tile_y % 4 == 0 and tile_x % 4 == 0:
                     map_row.append(1)
                 # 特定のパターンで壁を配置
-                elif (row % 8 == 3 and col % 3 == 1) or (row % 5 == 1 and col % 7 == 4):
+                elif tile_y % 6 == 2 and tile_x % 6 == 2:
+                    map_row.append(1)
+                elif tile_y % 8 == 3 and tile_x % 3 == 1:
                     map_row.append(1)
                 else:
                     map_row.append(0)
             map_data.append(map_row)
         return map_data
+
+    def tile_to_pixel(self, tile_x: int, tile_y: int) -> tuple[float, float]:
+        """タイル座標をピクセル座標に変換（中央座標系対応）"""
+        return self.coord_transformer.tile_to_pixel(tile_x, tile_y)
+
+    def pixel_to_tile(self, pixel_x: float, pixel_y: float) -> tuple[int, int]:
+        """ピクセル座標をタイル座標に変換（中央座標系対応）"""
+        return self.coord_transformer.pixel_to_tile(pixel_x, pixel_y)
+
+    def tile_to_map_index(self, tile_x: int, tile_y: int) -> tuple[int, int]:
+        """タイル座標をマップ配列インデックスに変換"""
+        return self.coord_transformer.tile_to_map_index(tile_x, tile_y)
+
+    def map_index_to_tile(self, map_col: int, map_row: int) -> tuple[int, int]:
+        """マップ配列インデックスをタイル座標に変換"""
+        return self.coord_transformer.map_index_to_tile(map_col, map_row)
+
+    def is_valid_tile(self, tile_x: int, tile_y: int) -> bool:
+        """タイル座標が有効範囲内かチェック"""
+        return self.coord_transformer.is_valid_tile_coordinate(tile_x, tile_y)
+
+    def get_tile_type(self, tile_x: int, tile_y: int) -> int:
+        """タイル座標でマップデータを取得"""
+        if not self.is_valid_tile(tile_x, tile_y):
+            return 1  # 範囲外は壁扱い
+
+        map_col, map_row = self.tile_to_map_index(tile_x, tile_y)
+        return self.map_data[map_row][map_col]
 
     def set_camera_follow_target(self, target):
         """カメラ追従対象を設定"""
