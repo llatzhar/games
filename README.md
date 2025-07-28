@@ -565,7 +565,7 @@ coverage html
 # コードフォーマット
 .\test.ps1 format
 
-# リンティング
+# リンティング(pip install flake8)
 .\test.ps1 lint
 ```
 

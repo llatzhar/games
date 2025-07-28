@@ -1,4 +1,4 @@
-# PowerShell テスト実行スクリプト
+﻿# PowerShell テスト実行スクリプト
 param(
     [string]$Command = "help"
 )
