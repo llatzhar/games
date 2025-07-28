@@ -1,10 +1,9 @@
 import pyxel
-import math
 import random
 
 # game.pyから定数をインポート
-from game import screen_width, screen_height, char_width, char_height, Scene, SubScene
-from game_state import GameState, City, Road, Player, Enemy
+from game import screen_width, screen_height, Scene
+from game_state import GameState, City
 from cutin import CutinSubScene
 from battle import BattleSubScene
 from hover_info import HoverInfo
@@ -675,33 +674,6 @@ class MapScene(Scene):
         """シーン遷移（状態マシンから呼び出される）"""
         return new_scene
     
-    def move_camera_to_city(self, city):
-        """カメラを指定した都市に移動"""
-        target_camera_x = city.x - self.camera_offset_x
-        target_camera_y = city.y - self.camera_offset_y
-        
-        # マップ範囲内に制限
-        target_camera_x = max(0, min(target_camera_x, self.map_pixel_width - screen_width))
-        target_camera_y = max(0, min(target_camera_y, self.map_pixel_height - screen_height))
-        
-        # カメラ位置を即座に設定（アニメーションなしで即移動）
-        self.camera_x = target_camera_x
-        self.camera_y = target_camera_y
-        
-        # カメラ追従をクリア
-        self.clear_camera_follow()
-    
-    def on_sub_scene_finished(self, finished_sub_scene):
-        """サブシーン終了時の処理"""
-        # BattleSubSceneが終了した場合
-        if isinstance(finished_sub_scene, BattleSubScene):
-            # BattleSequenceStateに戦闘終了を通知
-            from map_state_machine import MapStateType
-            if (self.state_context.get_current_state_type() == MapStateType.BATTLE_SEQUENCE and
-                hasattr(self.state_context.current_state, 'on_battle_finished')):
-                self.state_context.current_state.on_battle_finished()
-
-
     def draw(self):
         # サブシーンがある場合はサブシーンを描画
         if super().draw():
