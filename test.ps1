@@ -113,7 +113,7 @@ function Invoke-Lint {
     }
     
     try {
-        flake8 . --count --statistics
+        flake8 . --count --ignore=E203,W503 --max-line-length=88 --statistics
         Write-Host "リンティングが完了しました。" -ForegroundColor Green
     }
     catch {
@@ -136,8 +136,8 @@ function Invoke-Format {
     }
     
     try {
-        if ($hasBlack) { black . }
-        if ($hasIsort) { isort . }
+        if ($hasBlack) { black --line-length=88 . }
+        if ($hasIsort) { isort --line-length=88 . }
         Write-Host "フォーマットが完了しました。" -ForegroundColor Green
     }
     catch {
@@ -151,19 +151,19 @@ function Invoke-Check {
     
     try {
         if (Test-Command "black") {
-            black --check --diff .
+            black --check --diff --line-length=88 .
         } else {
             Write-Host "警告: black がインストールされていません。" -ForegroundColor Yellow
         }
         
         if (Test-Command "isort") {
-            isort --check-only --diff .
+            isort --check-only --diff --line-length=88 .
         } else {
             Write-Host "警告: isort がインストールされていません。" -ForegroundColor Yellow
         }
         
         if (Test-Command "flake8") {
-            flake8 . --count --statistics
+            flake8 . --count --ignore=E203,W503 --max-line-length=88 --statistics
         } else {
             Write-Host "警告: flake8 がインストールされていません。" -ForegroundColor Yellow
         }

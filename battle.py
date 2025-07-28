@@ -246,7 +246,9 @@ class BattleSubScene(SubScene):
             # プレイヤーが画面内に収まるかチェック
             if draw_y + player.height < pyxel.height - 20:
                 initial_life = self.initial_player_lives[i]
-                self.draw_character(player, draw_x, draw_y, True, initial_life, "player")  # 右向き
+                self.draw_character(
+                    player, draw_x, draw_y, True, initial_life, "player"
+                )  # 右向き
 
                 # プレイヤー名を表示
                 name_text = f"Player {i+1}"
@@ -270,7 +272,9 @@ class BattleSubScene(SubScene):
             # 敵が画面内に収まるかチェック
             if draw_y + enemy.height < pyxel.height - 20:
                 initial_life = self.initial_enemy_lives[i]
-                self.draw_character(enemy, draw_x, draw_y, False, initial_life, "enemy")  # 左向き
+                self.draw_character(
+                    enemy, draw_x, draw_y, False, initial_life, "enemy"
+                )  # 左向き
 
                 # 敵名を表示
                 name_text = f"Enemy {i+1}"

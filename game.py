@@ -97,7 +97,6 @@ class GameScene(Scene):
         # メインの処理
         if pyxel.btnp(pyxel.KEY_Q):
             return TitleScene()
-        moved = False
         # WASDで移動
         if pyxel.btn(pyxel.KEY_W):
             self.y -= 2
