@@ -287,12 +287,11 @@ class TransitionState(MapGameState):
         # 戦闘チェック
         self.battle_locations = self.context.game_state.check_battles()
 
-        # 次のターンを決定
-        if self.context.game_state.current_turn == "player":
-            self.next_turn = "enemy"
-        else:
-            self.next_turn = "player"
-            self.context.game_state.turn_counter += 1
+        # ターンを切り替え
+        self.context.game_state.switch_turn()
+
+        # 次のターンを決定（切り替え後の状態を使用）
+        self.next_turn = self.context.game_state.current_turn
 
         # 自動セーブ
         self.context.game_state.auto_save()
@@ -390,13 +389,16 @@ class BattleSequenceState(MapGameState):
         """全戦闘完了時の処理"""
         self.context.game_state.remove_defeated_characters()
 
+        # ターンを切り替え
+        self.context.game_state.switch_turn()
+
         # 次のターンのカットインへ遷移
         if self.context.game_state.current_turn == "player":
-            cutin_text = "ENEMY TURN"
-            next_turn = "enemy"
-        else:
             cutin_text = "PLAYER TURN"
             next_turn = "player"
+        else:
+            cutin_text = "ENEMY TURN"
+            next_turn = "enemy"
 
         self.transition_to(CutinState(self.context, cutin_text, next_turn))
 
@@ -417,6 +419,7 @@ class CutinState(MapGameState):
         self.next_turn = next_turn
 
     def enter(self):
+        print("enter CutinState")
         super().enter()
         cutin_sub_scene = CutinSubScene(self.context, self.cutin_text)
         self.context.set_sub_scene(cutin_sub_scene)
