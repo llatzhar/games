@@ -44,9 +44,10 @@ class BattleIndividualAttackState(BattleGameState):
         if not self.context.setup_next_attacker():
             # 全ての攻撃が完了した場合
             self.transition_to(BattleResultsState(self.context))
-        else:
-            # 攻撃を実行してGameStateを更新
-            self.context.execute_attack()
+            return
+        
+        # 攻撃を実行してGameStateを更新
+        self.context.execute_attack()
 
     def update(self):
         # 早期終了チェック
@@ -55,8 +56,9 @@ class BattleIndividualAttackState(BattleGameState):
             
         # 2秒経過で次の攻撃者に移行
         if self.get_elapsed_time() >= 60:  # 2秒
-            if self.context.setup_next_attacker():
-                # 次の攻撃者がいる場合、状態を再開始
+            # 次の攻撃者がいるかチェック
+            if self.context.current_attacker_index < len(self.context.initiative_order):
+                # 次の攻撃者がいる場合、新しい攻撃状態を開始
                 self.transition_to(BattleIndividualAttackState(self.context))
             else:
                 # 全ての攻撃が完了
