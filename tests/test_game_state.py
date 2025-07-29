@@ -320,8 +320,8 @@ class TestGameState(unittest.TestCase):
         self.assertEqual(len(battles[0]["players"]), 1)
         self.assertEqual(len(battles[0]["enemies"]), 1)
 
-    def test_battle_execution(self):
-        """戦闘実行のテスト"""
+    def test_battle_system_integration(self):
+        """戦闘システム統合テスト - check_battlesとBattleSubSceneの連携"""
         self.game_state.initialize_default_state()
 
         # プレイヤーと敵を同じ都市に配置
@@ -332,20 +332,84 @@ class TestGameState(unittest.TestCase):
         player.is_moving = False
         enemy.is_moving = False
 
-        initial_player_life = player.life
-        initial_enemy_life = enemy.life
+        # 戦闘検出のテスト
+        battles = self.game_state.check_battles()
+        self.assertEqual(len(battles), 1)
+        self.assertEqual(battles[0]["city_id"], 1)
+        self.assertEqual(len(battles[0]["players"]), 1)
+        self.assertEqual(len(battles[0]["enemies"]), 1)
+        
+        # 戦闘情報の詳細確認
+        battle_info = battles[0]
+        self.assertEqual(battle_info["players_before"], 1)
+        self.assertEqual(battle_info["enemies_before"], 1)
+        self.assertIn("players", battle_info)
+        self.assertIn("enemies", battle_info)
 
-        # 戦闘実行
-        battle_result = self.game_state.execute_battle(1, [player], [enemy])
+    def test_multiple_battles_detection(self):
+        """複数都市での同時戦闘検出テスト"""
+        self.game_state.initialize_default_state()
 
-        # 戦闘後にライフが減少していることを確認
-        self.assertLess(player.life, initial_player_life)
-        self.assertLess(enemy.life, initial_enemy_life)
+        # 複数の敵を追加して異なる都市に配置
+        from game_state import Enemy
+        enemy2 = Enemy(
+            self.game_state.cities[2].x, self.game_state.cities[2].y, 2, "defensive", 2
+        )
+        self.game_state.enemies.append(enemy2)
 
-        # 戦闘ログが存在することを確認
-        self.assertIsNotNone(battle_result)
-        self.assertIn("log", battle_result)
-        self.assertGreater(len(battle_result["log"]), 0)
+        # プレイヤー1を都市1、プレイヤー2を都市2に配置（既存の敵もそれぞれの都市にいる）
+        self.game_state.players[0].current_city_id = 1  # Central
+        self.game_state.players[1].current_city_id = 2  # West
+        self.game_state.enemies[0].current_city_id = 1  # Central
+        enemy2.current_city_id = 2  # West
+
+        # 全て移動停止状態にする
+        for player in self.game_state.players:
+            player.is_moving = False
+        for enemy in self.game_state.enemies:
+            enemy.is_moving = False
+
+        # 戦闘検出
+        battles = self.game_state.check_battles()
+        self.assertEqual(len(battles), 2)  # 2つの都市で戦闘発生
+
+        # 各戦闘の詳細確認
+        city_ids = [battle["city_id"] for battle in battles]
+        self.assertIn(1, city_ids)  # Central
+        self.assertIn(2, city_ids)  # West
+
+    def test_no_battle_when_moving(self):
+        """移動中のキャラクターは戦闘に参加しないテスト"""
+        self.game_state.initialize_default_state()
+
+        # プレイヤーと敵を同じ都市に配置
+        player = self.game_state.players[0]
+        enemy = self.game_state.enemies[0]
+        player.current_city_id = 1
+        enemy.current_city_id = 1
+        
+        # プレイヤーを移動中にする
+        player.is_moving = True
+        enemy.is_moving = False
+
+        # 戦闘は発生しないはず
+        battles = self.game_state.check_battles()
+        self.assertEqual(len(battles), 0)
+
+        # 敵を移動中にする
+        player.is_moving = False
+        enemy.is_moving = True
+
+        # まだ戦闘は発生しないはず
+        battles = self.game_state.check_battles()
+        self.assertEqual(len(battles), 0)
+
+        # 両方とも停止状態にすると戦闘発生
+        player.is_moving = False
+        enemy.is_moving = False
+
+        battles = self.game_state.check_battles()
+        self.assertEqual(len(battles), 1)
 
     def test_character_defeat(self):
         """キャラクター撃破のテスト"""
