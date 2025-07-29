@@ -1,5 +1,6 @@
 import argparse
 import os
+
 import pyxel
 
 fps = 30  # FPSを30で定義
@@ -154,18 +155,18 @@ if __name__ == "__main__":
     # コマンドライン引数の解析
     parser = argparse.ArgumentParser(description="Pyxel Turn-Based Strategy Game")
     parser.add_argument(
-        "--new-game", 
-        action="store_true", 
-        help="Start a new game by deleting the save file"
+        "--new-game",
+        action="store_true",
+        help="Start a new game by deleting the save file",
     )
     parser.add_argument(
         "--reset",
         action="store_true",
-        help="Reset game state by deleting the save file (alias for --new-game)"
+        help="Reset game state by deleting the save file (alias for --new-game)",
     )
-    
+
     args = parser.parse_args()
-    
+
     # --new-gameまたは--resetオプションが指定された場合、セーブファイルを削除
     if args.new_game or args.reset:
         save_file_path = os.path.join("saves", "game_state.json")
@@ -178,5 +179,5 @@ if __name__ == "__main__":
                 print(f"Failed to delete save file: {e}")
         else:
             print("No save file found. Starting new game...")
-    
+
     App()

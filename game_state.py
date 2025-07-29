@@ -135,9 +135,22 @@ class Character:
 
 
 class Player(Character):
-    def __init__(self, x: float, y: float, current_city_id: Optional[int] = None, initiative: int = 15):
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        current_city_id: Optional[int] = None,
+        initiative: int = 15,
+    ):
         super().__init__(
-            x, y, current_city_id, speed=2, life=120, attack=25, initiative=initiative, image_index=0
+            x,
+            y,
+            current_city_id,
+            speed=2,
+            life=120,
+            attack=25,
+            initiative=initiative,
+            image_index=0,
         )  # 1段目を使用、イニシアチブを引数で受け取る
 
     def get_hover_info(self) -> List[str]:
@@ -171,14 +184,21 @@ class Enemy(Character):
         # AIタイプに応じてイニシアチブを設定
         initiative_by_type = {
             "aggressive": 12,  # 積極的：やや高い
-            "defensive": 8,    # 防御的：低い
-            "patrol": 10,      # パトロール：標準
-            "random": 10,      # ランダム：標準
+            "defensive": 8,  # 防御的：低い
+            "patrol": 10,  # パトロール：標準
+            "random": 10,  # ランダム：標準
         }
         initiative = initiative_by_type.get(ai_type, 10)
-        
+
         super().__init__(
-            x, y, current_city_id, speed=1, life=80, attack=20, initiative=initiative, image_index=image_index
+            x,
+            y,
+            current_city_id,
+            speed=1,
+            life=80,
+            attack=20,
+            initiative=initiative,
+            image_index=image_index,
         )  # 2段目以降を使用
         self.ai_type = ai_type
         self.patrol_city_ids: List[int] = []  # 都市IDのリストに変更

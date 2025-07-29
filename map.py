@@ -722,12 +722,12 @@ class MapScene(Scene):
             next_scene = self.next_scene
             self.next_scene = None  # リセット
             return next_scene
-        
+
         # 戦闘終了後の復帰処理
         if self.battle_sequence_state:
             battle_state = self.battle_sequence_state
             self.battle_sequence_state = None  # リセット
-            
+
             # 戦闘完了後の処理を継続
             battle_state.on_battle_finished()
             return self

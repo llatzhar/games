@@ -1,8 +1,8 @@
 import pyxel
 
-from game import Scene
-from map_state_machine import StateContext, BattleStateType
 from battle_states import BattleIntroState
+from game import Scene
+from map_state_machine import StateContext
 
 
 class BattleScene(Scene):
@@ -14,30 +14,32 @@ class BattleScene(Scene):
         self.city = game_state.get_city_by_id(city_id)
         self.animation_timer = 0
         self.max_animation_time = 240  # 8秒間（30fps * 8秒）
-        
+
         # 状態マシンの初期化
         self.state_context = StateContext()
         self.early_exit = False  # 早期終了フラグ
         self.battle_completed = False  # 戦闘完了フラグ
-        
+
         self.damage_numbers = []  # ダメージ表示用
 
         # 戦闘に参加するキャラクター（GameStateから直接参照）
-        self.battle_players, self.battle_enemies = game_state.get_characters_in_city(city_id)
+        self.battle_players, self.battle_enemies = game_state.get_characters_in_city(
+            city_id
+        )
 
         # 戦闘開始時のライフを記録（表示用）
         self.initial_player_lives = [p.life for p in self.battle_players]
         self.initial_enemy_lives = [e.life for e in self.battle_enemies]
-        
+
         # イニシアチブ順序管理
         self.initiative_order = []
         self.current_attacker_index = 0
         self.current_attacker = None
         self.current_attack_damage = 0
-        
+
         # イニシアチブ順を計算
         self.calculate_initiative_order()
-        
+
         # 初期状態を設定
         self.state_context.change_state(BattleIntroState(self))
 
@@ -55,14 +57,16 @@ class BattleScene(Scene):
     def calculate_initiative_order(self):
         """イニシアチブ順を計算"""
         all_characters = self.battle_players + self.battle_enemies
-        self.initiative_order = sorted(all_characters, key=lambda c: c.initiative, reverse=True)
+        self.initiative_order = sorted(
+            all_characters, key=lambda c: c.initiative, reverse=True
+        )
         self.current_attacker_index = 0
 
     def setup_next_attacker(self):
         """次の攻撃者を設定"""
         if self.current_attacker_index >= len(self.initiative_order):
             return False  # 全ての攻撃が完了
-            
+
         self.current_attacker = self.initiative_order[self.current_attacker_index]
         self.current_attacker_index += 1
         return True
@@ -71,7 +75,7 @@ class BattleScene(Scene):
         """現在の攻撃者で攻撃を実行し、GameStateを直接更新"""
         if not self.current_attacker or self.current_attacker.life <= 0:
             return 0
-            
+
         damage = 0
         if self.current_attacker in self.battle_players:
             # プレイヤーの攻撃
@@ -80,7 +84,7 @@ class BattleScene(Scene):
                 target = min(alive_enemies, key=lambda e: e.life)
                 damage = min(self.current_attacker.attack, target.life)
                 target.life = max(0, target.life - damage)
-                
+
                 # ダメージ表示
                 if damage > 0:
                     self.add_damage_number(damage, "player")
@@ -91,14 +95,13 @@ class BattleScene(Scene):
                 target = min(alive_players, key=lambda p: p.life)
                 damage = min(self.current_attacker.attack, target.life)
                 target.life = max(0, target.life - damage)
-                
+
                 # ダメージ表示
                 if damage > 0:
                     self.add_damage_number(damage, "enemy")
-        
+
         self.current_attack_damage = damage
         return damage
-
 
     def update(self):
         self.animation_timer += 1
@@ -153,23 +156,31 @@ class BattleScene(Scene):
 
         # フェーズ別の表示
         current_phase = self.get_current_phase()
-        
+
         if current_phase == "intro":
             intro_text = "Battle begins!"
             text_width = len(intro_text) * 4
             pyxel.text(info_x - text_width // 2, info_y, intro_text, 11)
-            
+
             # イニシアチブ順を表示
-            if hasattr(self, 'initiative_order') and self.initiative_order:
+            if hasattr(self, "initiative_order") and self.initiative_order:
                 order_text = "Initiative Order:"
                 pyxel.text(info_x - len(order_text) * 2, info_y + 20, order_text, 6)
-                for i, char in enumerate(self.initiative_order[:3]):  # 最初の3キャラまで表示
-                    char_type = "Player" if char in self.battle_players else f"{char.ai_type} Enemy"
+                for i, char in enumerate(
+                    self.initiative_order[:3]
+                ):  # 最初の3キャラまで表示
+                    char_type = (
+                        "Player"
+                        if char in self.battle_players
+                        else f"{char.ai_type} Enemy"
+                    )
                     char_text = f"{char_type} (Init:{char.initiative})"
-                    pyxel.text(info_x - len(char_text) * 2, info_y + 30 + i * 8, char_text, 7)
+                    pyxel.text(
+                        info_x - len(char_text) * 2, info_y + 30 + i * 8, char_text, 7
+                    )
 
         elif current_phase == "individual_attack":
-            if hasattr(self, 'current_attacker') and self.current_attacker:
+            if hasattr(self, "current_attacker") and self.current_attacker:
                 if self.current_attacker in self.battle_players:
                     attack_text = f"Player (Init:{self.current_attacker.initiative}) attacks for {self.current_attack_damage} damage!"
                     color = 11
@@ -194,7 +205,9 @@ class BattleScene(Scene):
         elif current_phase == "outro":
             # フェードアウト効果
             current_state = self.state_context.current_state
-            fade_alpha = min(current_state.get_elapsed_time() * 8, 255) if current_state else 0
+            fade_alpha = (
+                min(current_state.get_elapsed_time() * 8, 255) if current_state else 0
+            )
             if fade_alpha < 128:
                 outro_text = "Press SPACE or ESC to continue"
                 text_width = len(outro_text) * 4
@@ -309,9 +322,17 @@ class BattleScene(Scene):
         # 攻撃フェーズ中は攻撃アニメーション
         current_phase = self.get_current_phase()
         current_state = self.state_context.current_state
-        
-        if current_phase == "individual_attack" and hasattr(self, 'current_attacker') and self.current_attacker:
-            if character == self.current_attacker and current_state and current_state.get_elapsed_time() < 20:
+
+        if (
+            current_phase == "individual_attack"
+            and hasattr(self, "current_attacker")
+            and self.current_attacker
+        ):
+            if (
+                character == self.current_attacker
+                and current_state
+                and current_state.get_elapsed_time() < 20
+            ):
                 # 攻撃時は少し前に出る
                 offset_x = 5 if facing_right else -5
                 x += offset_x
@@ -353,9 +374,17 @@ class BattleScene(Scene):
         """フラッシュエフェクトを描画（背景の上、他の要素の下）"""
         current_phase = self.get_current_phase()
         current_state = self.state_context.current_state
-        
-        if current_phase == "individual_attack" and hasattr(self, 'current_attacker') and self.current_attacker:
-            if current_state and current_state.get_elapsed_time() < 30 and self.current_attack_damage > 0:
+
+        if (
+            current_phase == "individual_attack"
+            and hasattr(self, "current_attacker")
+            and self.current_attacker
+        ):
+            if (
+                current_state
+                and current_state.get_elapsed_time() < 30
+                and self.current_attack_damage > 0
+            ):
                 flash_intensity = max(0, 30 - current_state.get_elapsed_time())
                 if flash_intensity > 15:
                     if self.current_attacker in self.battle_players:
@@ -369,7 +398,7 @@ class BattleScene(Scene):
         """戦闘の進行に応じて表示するライフ値を計算"""
         current_phase = self.get_current_phase()
         current_state = self.state_context.current_state
-        
+
         if current_phase == "intro":
             # 戦闘開始前のライフを表示
             return initial_life

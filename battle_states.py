@@ -15,9 +15,9 @@ class BattleIntroState(BattleGameState):
 
     def update(self):
         # 早期終了チェック
-        if hasattr(self.context, 'early_exit') and self.context.early_exit:
+        if hasattr(self.context, "early_exit") and self.context.early_exit:
             return None
-            
+
         # 2秒経過で次のフェーズに遷移
         if self.get_elapsed_time() >= 60:  # 2秒
             self.transition_to(BattleIndividualAttackState(self.context))
@@ -46,15 +46,15 @@ class BattleIndividualAttackState(BattleGameState):
             # 全ての攻撃が完了した場合
             self.transition_to(BattleResultsState(self.context))
             return
-        
+
         # 攻撃を実行してGameStateを更新
         self.context.execute_attack()
 
     def update(self):
         # 早期終了チェック
-        if hasattr(self.context, 'early_exit') and self.context.early_exit:
+        if hasattr(self.context, "early_exit") and self.context.early_exit:
             return None
-            
+
         # 2秒経過で次の攻撃者に移行
         if self.get_elapsed_time() >= 60:  # 2秒
             # 次の攻撃者がいるかチェック
@@ -87,9 +87,9 @@ class BattleResultsState(BattleGameState):
 
     def update(self):
         # 早期終了チェック
-        if hasattr(self.context, 'early_exit') and self.context.early_exit:
+        if hasattr(self.context, "early_exit") and self.context.early_exit:
             return None
-            
+
         # 3秒経過で次のフェーズに遷移
         if self.get_elapsed_time() >= 90:  # 3秒
             self.transition_to(BattleOutroState(self.context))
@@ -116,9 +116,9 @@ class BattleOutroState(BattleGameState):
 
     def update(self):
         # 早期終了チェック
-        if hasattr(self.context, 'early_exit') and self.context.early_exit:
+        if hasattr(self.context, "early_exit") and self.context.early_exit:
             return None
-            
+
         # 1秒経過で戦闘終了
         if self.get_elapsed_time() >= 30:  # 1秒
             self.exit()

@@ -140,7 +140,7 @@ class TestEnemy(unittest.TestCase):
             "defensive": 8,
             "random": 10,
         }
-        
+
         for ai_type, expected_initiative in ai_initiative_map.items():
             enemy = Enemy(0, 0, None, ai_type)
             self.assertEqual(enemy.ai_type, ai_type)
@@ -228,7 +228,9 @@ class TestGameState(unittest.TestCase):
         self.assertEqual(len(self.game_state.enemies), 1)
 
         # プレイヤーのイニシアチブ値チェック
-        self.assertEqual(self.game_state.players[0].initiative, 15)  # Player 1 デフォルト
+        self.assertEqual(
+            self.game_state.players[0].initiative, 15
+        )  # Player 1 デフォルト
         self.assertEqual(self.game_state.players[1].initiative, 10)  # Player 2 カスタム
 
         # 都市の存在確認
@@ -354,7 +356,7 @@ class TestGameState(unittest.TestCase):
         self.assertEqual(battles[0]["city_id"], 1)
         self.assertEqual(len(battles[0]["players"]), 1)
         self.assertEqual(len(battles[0]["enemies"]), 1)
-        
+
         # 戦闘情報の詳細確認
         battle_info = battles[0]
         self.assertEqual(battle_info["players_before"], 1)
@@ -368,6 +370,7 @@ class TestGameState(unittest.TestCase):
 
         # 複数の敵を追加して異なる都市に配置
         from game_state import Enemy
+
         enemy2 = Enemy(
             self.game_state.cities[2].x, self.game_state.cities[2].y, 2, "defensive", 2
         )
@@ -403,7 +406,7 @@ class TestGameState(unittest.TestCase):
         enemy = self.game_state.enemies[0]
         player.current_city_id = 1
         enemy.current_city_id = 1
-        
+
         # プレイヤーを移動中にする
         player.is_moving = True
         enemy.is_moving = False

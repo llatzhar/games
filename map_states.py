@@ -4,7 +4,7 @@ import pyxel
 
 from battle import BattleScene
 from cutin import CutinSubScene
-from game import Scene, screen_height, screen_width
+from game import screen_height, screen_width
 from map_state_machine import MapGameState, MapStateType
 
 
@@ -355,7 +355,9 @@ class BattleSequenceState(MapGameState):
 
     def start_next_battle(self):
         """次の戦闘を開始"""
-        print(f"Starting battle {self.current_battle_index + 1}/{len(self.battle_locations)}")
+        print(
+            f"Starting battle {self.current_battle_index + 1}/{len(self.battle_locations)}"
+        )
         if self.current_battle_index < len(self.battle_locations):
             current_battle = self.battle_locations[self.current_battle_index]
             city_id = current_battle["city_id"]
@@ -379,9 +381,9 @@ class BattleSequenceState(MapGameState):
         # MapSceneに戻る際の情報を設定
         map_scene = self.context  # MapSceneの参照
         map_scene.battle_sequence_state = self  # 自身を保存
-        
+
         battle_scene = BattleScene(city_id, self.context.game_state, map_scene)
-        
+
         # シーン遷移を要求
         self.context.next_scene = battle_scene
 
@@ -398,10 +400,8 @@ class BattleSequenceState(MapGameState):
         """全戦闘完了時の処理"""
         self.context.game_state.remove_defeated_characters()
 
-        # ターンを切り替え
-        self.context.game_state.switch_turn()
-
-        # 次のターンのカットインへ遷移
+        # ターン切り替えは既にTransitionStateで実行済み
+        # 現在のターンに基づいてカットインを表示
         if self.context.game_state.current_turn == "player":
             cutin_text = "PLAYER TURN"
             next_turn = "player"
