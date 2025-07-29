@@ -79,6 +79,7 @@ class BattleGameState(ABC):
     def enter(self):
         """状態開始時の処理"""
         self.enter_time = pyxel.frame_count
+        print(f"[ENTER] battle {self.state_type.value}")
 
     @abstractmethod
     def update(self):
@@ -96,6 +97,7 @@ class BattleGameState(ABC):
     @abstractmethod
     def exit(self):
         """状態終了時の処理"""
+        print(f"[EXIT] battle {self.state_type.value}")
         pass
 
     def transition_to(self, new_state):

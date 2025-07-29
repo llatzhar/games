@@ -143,9 +143,7 @@ class App:
     def update(self):
         next_scene = self.scene.update()
         if next_scene is not self.scene:
-            # シーンの初期化処理
-            if hasattr(next_scene, "__init__"):
-                next_scene.__init__()
+            # シーンを変更（再初期化は不要）
             self.scene = next_scene
 
     def draw(self):

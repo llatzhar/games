@@ -2,9 +2,9 @@ import random
 
 import pyxel
 
-from battle import BattleSubScene
+from battle import BattleScene
 from cutin import CutinSubScene
-from game import screen_height, screen_width
+from game import Scene, screen_height, screen_width
 from map_state_machine import MapGameState, MapStateType
 
 
@@ -335,6 +335,7 @@ class BattleSequenceState(MapGameState):
         self.current_battle_index = 0
         self.camera_moving = False
         self.camera_timer = 0
+        self.battle_scene = None
 
     def enter(self):
         super().enter()
@@ -354,6 +355,7 @@ class BattleSequenceState(MapGameState):
 
     def start_next_battle(self):
         """次の戦闘を開始"""
+        print(f"Starting battle {self.current_battle_index + 1}/{len(self.battle_locations)}")
         if self.current_battle_index < len(self.battle_locations):
             current_battle = self.battle_locations[self.current_battle_index]
             city_id = current_battle["city_id"]
@@ -369,15 +371,22 @@ class BattleSequenceState(MapGameState):
             self.finish_battles()
 
     def start_battle_scene(self):
-        """現在の戦闘のBattleSubSceneを開始"""
+        """現在の戦闘のBattleSceneに遷移"""
         current_battle = self.battle_locations[self.current_battle_index]
         city_id = current_battle["city_id"]
 
-        # GameStateの参照を直接渡す
-        battle_sub_scene = BattleSubScene(self.context, city_id, self.context.game_state)
-        self.context.set_sub_scene(battle_sub_scene)
+        # BattleSceneを作成してシーン遷移を要求
+        # MapSceneに戻る際の情報を設定
+        map_scene = self.context  # MapSceneの参照
+        map_scene.battle_sequence_state = self  # 自身を保存
+        
+        battle_scene = BattleScene(city_id, self.context.game_state, map_scene)
+        
+        # シーン遷移を要求
+        self.context.next_scene = battle_scene
 
     def on_battle_finished(self):
+        print("on_battle_finished")
         """戦闘終了時の処理"""
         self.current_battle_index += 1
         if self.current_battle_index < len(self.battle_locations):
@@ -400,6 +409,7 @@ class BattleSequenceState(MapGameState):
             cutin_text = "ENEMY TURN"
             next_turn = "enemy"
 
+        print("call transition to CutinState")
         self.transition_to(CutinState(self.context, cutin_text, next_turn))
 
     def handle_input(self):
@@ -407,6 +417,7 @@ class BattleSequenceState(MapGameState):
         pass
 
     def exit(self):
+        print("exit battleState")
         self.context.is_processing_battles = False
 
 

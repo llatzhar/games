@@ -2,7 +2,7 @@ import random
 
 import pyxel
 
-from battle import BattleSubScene
+# from battle import BattleSubScene  # 不要 - BattleSceneを使用
 from coordinate_utils import create_default_coordinate_transformer
 from cutin import CutinSubScene
 
@@ -81,6 +81,7 @@ class MapScene(Scene):
 
         # シーン遷移用
         self.next_scene = None
+        self.battle_sequence_state = None  # 戦闘シーケンス状態の保存
 
     def generate_centered_map(self):
         """17x17の中央座標系マップを生成（タイル座標-8〜8）"""
@@ -593,50 +594,13 @@ class MapScene(Scene):
         # カメラ追従をクリア
         self.clear_camera_follow()
 
-    def start_current_battle_scene(self):
-        """現在の戦闘のBattleSubSceneを開始"""
-        current_battle = self.pending_battle_results[self.current_battle_index]
-        city_id = current_battle["city_id"]
-        city = self.game_state.get_city_by_id(city_id)
-
-        if city:
-            # BattleSubSceneを開始
-            battle_sub_scene = BattleSubScene(self, current_battle, city)
-            self.set_sub_scene(battle_sub_scene)
-
-    def on_battle_scene_finished(self):
-        """戦闘シーンが終了した時の処理"""
-        self.current_battle_index += 1
-
-        if self.current_battle_index < len(self.pending_battle_results):
-            # 次の戦闘を処理
-            self.process_next_battle()
-        else:
-            # 全ての戦闘処理が完了
-            self.finish_battle_sequence()
-
-    def finish_battle_sequence(self):
-        """戦闘シーケンスを終了"""
-        self.is_processing_battles = False
-        self.pending_battle_results = []
-        self.current_battle_index = 0
-
-        # 戦闘シーケンス完了後に倒されたキャラクターを削除
-        self.game_state.remove_defeated_characters()
-
-        # ターン切り替えのカットインを表示
-        if self.game_state.current_turn == "player":
-            cutin_text = "ENEMY TURN"
-        else:
-            cutin_text = "PLAYER TURN"
-
-        self.set_sub_scene(CutinSubScene(self, cutin_text))
+    # 古い戦闘処理メソッドは削除済み - 新しいBattleSceneを使用
 
     def on_sub_scene_finished(self, finished_sub_scene):
         """サブシーン終了時の処理"""
-        # BattleSubSceneが終了した場合
-        if isinstance(finished_sub_scene, BattleSubScene):
-            self.on_battle_scene_finished()
+        print("SubScene finished:", finished_sub_scene)
+        # 古い戦闘処理は無効化 - 新しいBattleSceneを使用
+        pass
 
     def switch_turn(self):
         """ターンを切り替える"""
@@ -755,7 +719,18 @@ class MapScene(Scene):
 
         # シーン遷移チェック
         if self.next_scene:
-            return self.next_scene
+            next_scene = self.next_scene
+            self.next_scene = None  # リセット
+            return next_scene
+        
+        # 戦闘終了後の復帰処理
+        if self.battle_sequence_state:
+            battle_state = self.battle_sequence_state
+            self.battle_sequence_state = None  # リセット
+            
+            # 戦闘完了後の処理を継続
+            battle_state.on_battle_finished()
+            return self
 
         # クリック座標表示時間を減らす
         if self.click_timer > 0:

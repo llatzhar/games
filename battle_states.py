@@ -29,6 +29,7 @@ class BattleIntroState(BattleGameState):
             self.context.early_exit = True
 
     def exit(self):
+        super().exit()
         pass
 
 
@@ -71,6 +72,7 @@ class BattleIndividualAttackState(BattleGameState):
             self.context.early_exit = True
 
     def exit(self):
+        super().exit()
         pass
 
 
@@ -99,6 +101,7 @@ class BattleResultsState(BattleGameState):
             self.context.early_exit = True
 
     def exit(self):
+        super().exit()
         pass
 
 
@@ -118,6 +121,7 @@ class BattleOutroState(BattleGameState):
             
         # 1秒経過で戦闘終了
         if self.get_elapsed_time() >= 30:  # 1秒
+            self.exit()
             return None  # サブシーン終了
         return self.context
 
@@ -127,4 +131,5 @@ class BattleOutroState(BattleGameState):
             self.context.early_exit = True
 
     def exit(self):
+        super().exit()
         pass

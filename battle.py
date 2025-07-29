@@ -1,15 +1,16 @@
 import pyxel
 
-from game import SubScene
+from game import Scene
 from map_state_machine import StateContext, BattleStateType
 from battle_states import BattleIntroState
 
 
-class BattleSubScene(SubScene):
-    def __init__(self, parent_scene, city_id: int, game_state):
-        super().__init__(parent_scene)
+class BattleScene(Scene):
+    def __init__(self, city_id: int, game_state, previous_scene):
+        super().__init__()
         self.city_id = city_id
-        self.game_state = game_state  # GameStateの直接参照
+        self.game_state = game_state  # GameStateの共有参照
+        self.previous_scene = previous_scene  # 戻り先のシーン
         self.city = game_state.get_city_by_id(city_id)
         self.animation_timer = 0
         self.max_animation_time = 240  # 8秒間（30fps * 8秒）
@@ -17,6 +18,7 @@ class BattleSubScene(SubScene):
         # 状態マシンの初期化
         self.state_context = StateContext()
         self.early_exit = False  # 早期終了フラグ
+        self.battle_completed = False  # 戦闘完了フラグ
         
         self.damage_numbers = []  # ダメージ表示用
 
@@ -96,54 +98,22 @@ class BattleSubScene(SubScene):
         
         self.current_attack_damage = damage
         return damage
-        self.enemy_damage = 0
-        self.target_enemy_type = "enemy"
 
-        for log_entry in self.battle_result["log"]:
-            if "Player (Init:" in log_entry:
-                # "Player (Init:15) dealt 25 damage to aggressive enemy (Init:12) in Town A"
-                parts = log_entry.split()
-                damage_index = -1
-                for i, part in enumerate(parts):
-                    if part == "dealt" and i + 1 < len(parts):
-                        try:
-                            self.player_damage += int(parts[i + 1])
-                        except ValueError:
-                            pass
-                        break
-                        
-                # 敵タイプを特定
-                if "aggressive" in log_entry:
-                    self.target_enemy_type = "aggressive"
-                elif "patrol" in log_entry:
-                    self.target_enemy_type = "patrol"
-                elif "defensive" in log_entry:
-                    self.target_enemy_type = "defensive"
-                elif "random" in log_entry:
-                    self.target_enemy_type = "random"
-
-            elif "enemy (Init:" in log_entry:
-                # "aggressive enemy (Init:12) dealt 20 damage to player (Init:15) in Town A"
-                parts = log_entry.split()
-                for i, part in enumerate(parts):
-                    if part == "dealt" and i + 1 < len(parts):
-                        try:
-                            self.enemy_damage += int(parts[i + 1])
-                        except ValueError:
-                            pass
-                        break
 
     def update(self):
         self.animation_timer += 1
 
         # 早期終了チェック
         if self.early_exit:
-            return None
+            # 戦闘を早期終了して前のシーンに戻る
+            return self.previous_scene
 
         # 状態マシンの更新
         result = self.state_context.update()
         if result is None:
-            return None  # サブシーン終了
+            # 戦闘完了、前のシーンに戻る
+            self.battle_completed = True
+            return self.previous_scene
 
         # 入力処理
         self.state_context.handle_input()
@@ -155,6 +125,7 @@ class BattleSubScene(SubScene):
             if timer > 0
         ]
 
+        # 現在のシーンを継続
         return self
 
     def add_damage_number(self, damage, attacker):
