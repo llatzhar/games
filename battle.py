@@ -1,6 +1,8 @@
 import pyxel
 
 from game import SubScene
+from map_state_machine import StateContext, BattleStateType
+from battle_states import BattleIntroState
 
 
 class BattleSubScene(SubScene):
@@ -10,9 +12,11 @@ class BattleSubScene(SubScene):
         self.city = city
         self.animation_timer = 0
         self.max_animation_time = 240  # 8秒間（30fps * 8秒）
-        # intro -> player_attack -> enemy_attack -> results -> outro
-        self.phase = "intro"
-        self.phase_timer = 0
+        
+        # 状態マシンの初期化
+        self.state_context = StateContext()
+        self.early_exit = False  # 早期終了フラグ
+        
         self.damage_numbers = []  # ダメージ表示用
 
         # 戦闘に参加するキャラクター（戦闘開始時の状態をキャプチャ）
@@ -20,14 +24,33 @@ class BattleSubScene(SubScene):
         self.battle_enemies = battle_info["enemies"]
 
         # 戦闘開始時のライフを記録（戦闘前の状態を保存）
-        self.initial_player_lives = [p.life for p in self.battle_players]
-        self.initial_enemy_lives = [e.life for e in self.battle_enemies]
+        self.initial_player_lives = []
+        self.initial_enemy_lives = []
 
         # 戦闘計算を実行（ここで初めて実際の戦闘を行う）
         self.battle_result = self.execute_battle()
 
         # 戦闘ログから情報を抽出
         self.parse_battle_log()
+        
+        # 初期状態を設定
+        self.state_context.change_state(BattleIntroState(self))
+
+    def capture_initial_state(self):
+        """戦闘開始時の状態をキャプチャ"""
+        self.initial_player_lives = [p.life for p in self.battle_players]
+        self.initial_enemy_lives = [e.life for e in self.battle_enemies]
+
+    def change_state(self, new_state):
+        """状態変更（状態マシンとの連携）"""
+        self.state_context.change_state(new_state)
+
+    def get_current_phase(self):
+        """現在のフェーズを取得"""
+        current_state = self.state_context.current_state
+        if current_state:
+            return current_state.state_type.value
+        return "unknown"
 
     def execute_battle(self):
         """戦闘を実行して結果を返す"""
@@ -90,31 +113,18 @@ class BattleSubScene(SubScene):
 
     def update(self):
         self.animation_timer += 1
-        self.phase_timer += 1
 
-        # フェーズ管理
-        if self.phase == "intro" and self.phase_timer >= 60:  # 2秒
-            self.phase = "player_attack"
-            self.phase_timer = 0
-            if self.player_damage > 0:
-                self.add_damage_number(self.player_damage, "player")
+        # 早期終了チェック
+        if self.early_exit:
+            return None
 
-        elif self.phase == "player_attack" and self.phase_timer >= 60:  # 2秒
-            self.phase = "enemy_attack"
-            self.phase_timer = 0
-            if self.enemy_damage > 0:
-                self.add_damage_number(self.enemy_damage, "enemy")
-
-        elif self.phase == "enemy_attack" and self.phase_timer >= 60:  # 2秒
-            self.phase = "results"
-            self.phase_timer = 0
-
-        elif self.phase == "results" and self.phase_timer >= 90:  # 3秒
-            self.phase = "outro"
-            self.phase_timer = 0
-
-        elif self.phase == "outro" and self.phase_timer >= 30:  # 1秒
+        # 状態マシンの更新
+        result = self.state_context.update()
+        if result is None:
             return None  # サブシーン終了
+
+        # 入力処理
+        self.state_context.handle_input()
 
         # ダメージナンバーの更新
         self.damage_numbers = [
@@ -122,10 +132,6 @@ class BattleSubScene(SubScene):
             for damage, attacker, timer in self.damage_numbers
             if timer > 0
         ]
-
-        # ESCキーまたはスペースキーで早期終了
-        if pyxel.btnp(pyxel.KEY_ESCAPE) or pyxel.btnp(pyxel.KEY_SPACE):
-            return None
 
         return self
 
@@ -153,12 +159,14 @@ class BattleSubScene(SubScene):
         pyxel.text(info_x - text_width // 2, info_y - 30, city_text, 7)
 
         # フェーズ別の表示
-        if self.phase == "intro":
+        current_phase = self.get_current_phase()
+        
+        if current_phase == "intro":
             intro_text = "Battle begins!"
             text_width = len(intro_text) * 4
             pyxel.text(info_x - text_width // 2, info_y, intro_text, 11)
 
-        elif self.phase == "player_attack":
+        elif current_phase == "player_attack":
             if self.player_damage > 0:
                 attack_text = f"Players attack for {self.player_damage} damage!"
                 text_width = len(attack_text) * 4
@@ -168,7 +176,7 @@ class BattleSubScene(SubScene):
                 text_width = len(miss_text) * 4
                 pyxel.text(info_x - text_width // 2, info_y, miss_text, 8)
 
-        elif self.phase == "enemy_attack":
+        elif current_phase == "enemy_attack":
             if self.enemy_damage > 0:
                 attack_text = f"Enemies attack for {self.enemy_damage} damage!"
                 text_width = len(attack_text) * 4
@@ -178,7 +186,7 @@ class BattleSubScene(SubScene):
                 text_width = len(miss_text) * 4
                 pyxel.text(info_x - text_width // 2, info_y, miss_text, 11)
 
-        elif self.phase == "results":
+        elif current_phase == "results":
             result_text = "Battle concluded"
             text_width = len(result_text) * 4
             pyxel.text(info_x - text_width // 2, info_y, result_text, 10)
@@ -190,9 +198,10 @@ class BattleSubScene(SubScene):
             summary_width = len(battle_summary) * 4
             pyxel.text(info_x - summary_width // 2, info_y + 20, battle_summary, 6)
 
-        elif self.phase == "outro":
+        elif current_phase == "outro":
             # フェードアウト効果
-            fade_alpha = min(self.phase_timer * 8, 255)
+            current_state = self.state_context.current_state
+            fade_alpha = min(current_state.get_elapsed_time() * 8, 255) if current_state else 0
             if fade_alpha < 128:
                 outro_text = "Press SPACE or ESC to continue"
                 text_width = len(outro_text) * 4
@@ -305,17 +314,20 @@ class BattleSubScene(SubScene):
         src_y = character.image_index * 16
 
         # 攻撃フェーズ中は攻撃アニメーション
+        current_phase = self.get_current_phase()
+        current_state = self.state_context.current_state
+        
         if (
-            self.phase == "player_attack"
+            current_phase == "player_attack"
             and hasattr(character, "attack")
             and character in self.battle_players
         ) or (
-            self.phase == "enemy_attack"
+            current_phase == "enemy_attack"
             and hasattr(character, "ai_type")
             and character in self.battle_enemies
         ):
             # 攻撃時は少し前に出る
-            if self.phase_timer < 20:
+            if current_state and current_state.get_elapsed_time() < 20:
                 offset_x = 5 if facing_right else -5
                 x += offset_x
 
@@ -354,37 +366,43 @@ class BattleSubScene(SubScene):
 
     def draw_flash_effects(self):
         """フラッシュエフェクトを描画（背景の上、他の要素の下）"""
-        if self.phase == "player_attack" and self.player_damage > 0:
+        current_phase = self.get_current_phase()
+        current_state = self.state_context.current_state
+        
+        if current_phase == "player_attack" and self.player_damage > 0:
             # プレイヤー攻撃エフェクト（青色の閃光）
-            if self.phase_timer < 30:
-                flash_intensity = max(0, 30 - self.phase_timer)
+            if current_state and current_state.get_elapsed_time() < 30:
+                flash_intensity = max(0, 30 - current_state.get_elapsed_time())
                 if flash_intensity > 15:
                     pyxel.rect(0, 0, pyxel.width, pyxel.height, 12)
 
-        elif self.phase == "enemy_attack" and self.enemy_damage > 0:
+        elif current_phase == "enemy_attack" and self.enemy_damage > 0:
             # 敵攻撃エフェクト（赤色の閃光）
-            if self.phase_timer < 30:
-                flash_intensity = max(0, 30 - self.phase_timer)
+            if current_state and current_state.get_elapsed_time() < 30:
+                flash_intensity = max(0, 30 - current_state.get_elapsed_time())
                 if flash_intensity > 15:
                     pyxel.rect(0, 0, pyxel.width, pyxel.height, 8)
 
     def get_displayed_life(self, character, initial_life, character_type):
         """戦闘の進行に応じて表示するライフ値を計算"""
-        if self.phase == "intro":
+        current_phase = self.get_current_phase()
+        current_state = self.state_context.current_state
+        
+        if current_phase == "intro":
             # 戦闘開始前のライフを表示
             return initial_life
-        elif self.phase == "player_attack" and character_type == "enemy":
+        elif current_phase == "player_attack" and character_type == "enemy":
             # プレイヤー攻撃フェーズ中の敵のライフは徐々に減る
-            if self.phase_timer < 60:  # 2秒間で減少
-                progress = self.phase_timer / 60
+            if current_state and current_state.get_elapsed_time() < 60:  # 2秒間で減少
+                progress = current_state.get_elapsed_time() / 60
                 damage_taken = initial_life - character.life
                 return int(initial_life - damage_taken * progress)
             else:
                 return character.life
-        elif self.phase == "enemy_attack" and character_type == "player":
+        elif current_phase == "enemy_attack" and character_type == "player":
             # 敵攻撃フェーズ中のプレイヤーのライフは徐々に減る
-            if self.phase_timer < 60:  # 2秒間で減少
-                progress = self.phase_timer / 60
+            if current_state and current_state.get_elapsed_time() < 60:  # 2秒間で減少
+                progress = current_state.get_elapsed_time() / 60
                 damage_taken = initial_life - character.life
                 return int(initial_life - damage_taken * progress)
             else:

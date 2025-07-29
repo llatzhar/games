@@ -18,6 +18,16 @@ class MapStateType(Enum):
     PAUSED = "paused"
 
 
+class BattleStateType(Enum):
+    """戦闘シーンの状態タイプ"""
+
+    INTRO = "intro"
+    PLAYER_ATTACK = "player_attack"
+    ENEMY_ATTACK = "enemy_attack"
+    RESULTS = "results"
+    OUTRO = "outro"
+
+
 class MapGameState(ABC):
     """マップゲーム状態の基底クラス"""
 
@@ -36,6 +46,46 @@ class MapGameState(ABC):
         """毎フレーム更新処理
         Returns:
             Scene: 継続する場合はself、シーン変更の場合は新しいシーン、終了の場合はNone
+        """
+        pass
+
+    @abstractmethod
+    def handle_input(self):
+        """入力処理"""
+        pass
+
+    @abstractmethod
+    def exit(self):
+        """状態終了時の処理"""
+        pass
+
+    def transition_to(self, new_state):
+        """状態遷移実行"""
+        self.context.change_state(new_state)
+
+    def get_elapsed_time(self):
+        """状態に入ってからの経過時間（フレーム数）"""
+        return pyxel.frame_count - self.enter_time
+
+
+class BattleGameState(ABC):
+    """戦闘ゲーム状態の基底クラス"""
+
+    def __init__(self, context, state_type: BattleStateType):
+        self.context = context  # BattleSubSceneへの参照
+        self.state_type = state_type
+        self.enter_time = 0  # 状態に入った時間
+
+    @abstractmethod
+    def enter(self):
+        """状態開始時の処理"""
+        self.enter_time = pyxel.frame_count
+
+    @abstractmethod
+    def update(self):
+        """毎フレーム更新処理
+        Returns:
+            Scene: 継続する場合はself、終了の場合はNone
         """
         pass
 

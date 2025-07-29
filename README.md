@@ -250,6 +250,256 @@ Pyxelライブラリを使用したターンベース戦略ゲームです。プ
 - **ユーザビリティ**: 直感的な操作と視覚フィードバック
 - **保守性**: モジュール間の疎結合と明確なインターフェース
 
+## battle.py モジュール仕様
+
+### 概要
+`battle.py`は戦闘シーケンスを視覚的に表現するモジュールで、`BattleSubScene`クラスによって戦闘の演出と結果表示を担当します。状態マシンパターンを使用して、戦闘フェーズの管理を行います。
+
+### 主要クラス: BattleSubScene
+
+#### アーキテクチャ
+- **状態マシンベース**: `map.py`と同じ状態マシン基底クラス(`StateContext`, `BattleGameState`)を使用
+- **フェーズ分離**: 各戦闘段階を独立した状態クラスで管理
+- **共通基盤**: `map_state_machine.py`の基底クラスを拡張して戦闘専用状態を実装
+
+#### 基本機能と責任
+1. **戦闘演出管理**
+   - 状態マシンによるフェーズベースの戦闘進行制御
+   - アニメーション効果とタイミング管理
+   - 戦闘参加キャラクターの視覚表現
+   - ダメージ表示とエフェクト演出
+
+2. **戦闘計算実行**
+   - 戦闘開始時の参加キャラクター状態保存
+   - 実際の戦闘ロジック実行（`execute_battle()`）
+   - 戦闘ログの生成と解析
+   - キャラクターライフの更新
+
+3. **ユーザーインターフェース**
+   - 戦闘情報の表示（都市名、フェーズ、ダメージ）
+   - プログレスバーによる進行状況表示
+   - 早期終了オプション（ESC/SPACE）
+   - ライフゲージとキャラクター情報
+
+#### 状態マシンシステム
+
+##### 戦闘状態の定義
+```python
+class BattleStateType(Enum):
+    INTRO = "intro"
+    PLAYER_ATTACK = "player_attack"
+    ENEMY_ATTACK = "enemy_attack"
+    RESULTS = "results"
+    OUTRO = "outro"
+```
+
+##### 戦闘状態クラス (`battle_states.py`)
+
+1. **BattleIntroState（戦闘開始状態）**
+   - **継続時間**: 2秒（60フレーム）
+   - **責任**: 戦闘開始の告知、初期状態キャプチャ
+   - **遷移先**: `BattlePlayerAttackState`
+
+2. **BattlePlayerAttackState（プレイヤー攻撃状態）**
+   - **継続時間**: 2秒（60フレーム）
+   - **責任**: プレイヤー攻撃演出、ダメージ表示
+   - **視覚効果**: 青色フラッシュ、前進アニメーション
+   - **遷移先**: `BattleEnemyAttackState`
+
+3. **BattleEnemyAttackState（敵攻撃状態）**
+   - **継続時間**: 2秒（60フレーム）
+   - **責任**: 敵攻撃演出、ダメージ表示
+   - **視覚効果**: 赤色フラッシュ、前進アニメーション
+   - **遷移先**: `BattleResultsState`
+
+4. **BattleResultsState（結果表示状態）**
+   - **継続時間**: 3秒（90フレーム）
+   - **責任**: 戦闘結果の表示、兵力情報表示
+   - **遷移先**: `BattleOutroState`
+
+5. **BattleOutroState（戦闘終了状態）**
+   - **継続時間**: 1秒（30フレーム）
+   - **責任**: 戦闘終了処理、フェードアウト
+   - **遷移先**: サブシーン終了（`None`）
+
+##### 状態遷移フロー
+```python
+# 戦闘フェーズ遷移
+BattleIntroState → BattlePlayerAttackState → BattleEnemyAttackState → BattleResultsState → BattleOutroState → 終了
+```
+
+##### 早期終了システム
+```python
+# 全状態で共通の早期終了処理
+def handle_input(self):
+    if pyxel.btnp(pyxel.KEY_ESCAPE) or pyxel.btnp(pyxel.KEY_SPACE):
+        self.context.early_exit = True
+```
+
+#### 状態管理システム
+
+##### フェーズベースの戦闘進行
+戦闘は5つの明確なフェーズで管理されます：
+
+```python
+# フェーズ遷移フロー
+"intro" → "player_attack" → "enemy_attack" → "results" → "outro"
+```
+
+1. **Introフェーズ（2秒）**
+   - **目的**: 戦闘開始の告知と準備
+   - **表示内容**: "Battle begins!" メッセージ
+   - **キャラクター状態**: 戦闘前のライフ値を表示
+   - **遷移条件**: 60フレーム（2秒）経過後
+
+2. **Player Attackフェーズ（2秒）**
+   - **目的**: プレイヤー軍の攻撃演出
+   - **表示内容**: 攻撃ダメージまたはミス表示
+   - **視覚効果**: 青色フラッシュエフェクト
+   - **キャラクターアニメーション**: 攻撃時の前進モーション
+   - **ダメージ表示**: 敵側にダメージ数値を表示
+   - **遷移条件**: 60フレーム経過後
+
+3. **Enemy Attackフェーズ（2秒）**
+   - **目的**: 敵軍の攻撃演出
+   - **表示内容**: 攻撃ダメージまたはミス表示
+   - **視覚効果**: 赤色フラッシュエフェクト
+   - **キャラクターアニメーション**: 攻撃時の前進モーション
+   - **ダメージ表示**: プレイヤー側にダメージ数値を表示
+   - **遷移条件**: 60フレーム経過後
+
+4. **Resultsフェーズ（3秒）**
+   - **目的**: 戦闘結果の表示と確認
+   - **表示内容**: "Battle concluded" と兵力情報
+   - **キャラクター状態**: 最終的なライフ値を表示
+   - **遷移条件**: 90フレーム（3秒）経過後
+
+5. **Outroフェーズ（1秒）**
+   - **目的**: 戦闘終了とサブシーン終了準備
+   - **表示内容**: 継続指示メッセージ
+   - **フェードアウト効果**: 徐々に画面を暗転
+   - **遷移条件**: 30フレーム（1秒）経過後またはキー入力
+
+#### タイマー管理システム
+
+```python
+class BattleSubScene:
+    def __init__(self):
+        self.animation_timer = 0      # 全体進行タイマー
+        self.phase_timer = 0          # フェーズ内タイマー
+        self.max_animation_time = 240 # 最大8秒間の演出
+```
+
+- **animation_timer**: 戦闘開始からの総経過時間
+- **phase_timer**: 現在フェーズ内での経過時間（フェーズ切り替え時にリセット）
+- **フェーズ切り替え**: phase_timerが指定値に達すると次フェーズに自動遷移
+
+#### 戦闘データ管理
+
+##### 戦闘前状態の保存
+```python
+# 戦闘開始時の状態をキャプチャ
+self.battle_players = battle_info["players"]
+self.battle_enemies = battle_info["enemies"]
+self.initial_player_lives = [p.life for p in self.battle_players]
+self.initial_enemy_lives = [e.life for e in self.battle_enemies]
+```
+
+##### 戦闘ログ解析
+```python
+def parse_battle_log(self):
+    """戦闘ログから表示用情報を抽出"""
+    # ダメージ値と対象敵タイプを特定
+    # "Players dealt 25 damage to aggressive enemy in Town A"
+    # "Enemies dealt 20 damage to player in Town A"
+```
+
+#### 視覚効果システム
+
+##### ダメージナンバー表示
+```python
+self.damage_numbers = []  # (damage, attacker, timer) のリスト
+
+def add_damage_number(self, damage, attacker):
+    self.damage_numbers.append((damage, attacker, 90))  # 3秒間表示
+```
+
+- **浮上効果**: ダメージ数値が時間と共に上昇
+- **色分け**: プレイヤー攻撃（青色）、敵攻撃（赤色）
+- **位置計算**: 攻撃対象側に数値を表示
+
+##### フラッシュエフェクト
+```python
+def draw_flash_effects(self):
+    # プレイヤー攻撃: 青色閃光（color 12）
+    # 敵攻撃: 赤色閃光（color 8）
+    # 条件: フェーズタイマー < 30 かつ ダメージ > 0
+```
+
+##### ライフゲージ表示
+```python
+def get_displayed_life(self, character, initial_life, character_type):
+    """戦闘進行に応じた段階的ライフ減少演出"""
+    # 攻撃フェーズ中は徐々にライフが減少
+    progress = self.phase_timer / 60  # 2秒間で完了
+    damage_taken = initial_life - character.life
+    return int(initial_life - damage_taken * progress)
+```
+
+#### キャラクター描画システム
+
+##### 位置配置ロジック
+```python
+# プレイヤー: 画面左側（x=50）、縦配置（40px間隔）
+# 敵: 画面右側（x=width-80）、縦配置（40px間隔）
+# 向き: プレイヤー（右向き）、敵（左向き）
+```
+
+##### アニメーション制御
+```python
+# ゆっくりとしたアニメーション（20フレーム周期）
+anim_frame = (pyxel.frame_count // 20) % 2
+
+# 攻撃時の前進モーション
+if attack_phase and phase_timer < 20:
+    offset_x = 5 if facing_right else -5
+```
+
+#### 早期終了システム
+```python
+def update(self):
+    # ESCキーまたはスペースキーで即座に終了
+    if pyxel.btnp(pyxel.KEY_ESCAPE) or pyxel.btnp(pyxel.KEY_SPACE):
+        return None  # サブシーン終了
+```
+
+#### 戦闘結果統合
+```python
+def execute_battle(self):
+    """実際の戦闘計算を実行"""
+    # プレイヤー攻撃: 最も弱い敵を優先攻撃
+    # 敵攻撃: 最も弱いプレイヤーを優先攻撃
+    # 戦闘ログ生成: 詳細なダメージ情報を記録
+```
+
+### 依存関係と統合
+
+#### 親シーンとの連携
+- **起動**: `MapScene`から`BattleSubScene`として呼び出し
+- **終了**: `None`を返してメインシーンに制御を戻す
+- **データ受け渡し**: 戦闘情報（`battle_info`）と都市情報（`city`）
+
+#### リソース管理
+- **スプライト**: `Image Bank 0`からキャラクタースプライトを取得
+- **色定数**: Pyxelの標準カラーパレットを使用
+- **音響効果**: 現在未実装（将来の拡張ポイント）
+
+### 設計思想
+- **フェーズ分離**: 各戦闘段階を明確に分離した状態管理
+- **視覚的フィードバック**: リアルタイムなダメージ表示とアニメーション
+- **ユーザー制御**: 早期終了オプションによる快適な操作性
+- **データ整合性**: 戦闘前後の状態保持と段階的な変化表現
+
 ## StateMachineパターン適用設計
 
 ### 概要
