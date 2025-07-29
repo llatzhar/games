@@ -265,12 +265,14 @@ Pyxelライブラリを使用したターンベース戦略ゲームです。プ
 #### 基本機能と責任
 1. **戦闘演出管理**
    - 状態マシンによるフェーズベースの戦闘進行制御
+   - イニシアチブベースの個別攻撃シーケンス
    - アニメーション効果とタイミング管理
    - 戦闘参加キャラクターの視覚表現
    - ダメージ表示とエフェクト演出
 
 2. **戦闘計算実行**
    - 戦闘開始時の参加キャラクター状態保存
+   - イニシアチブ順による攻撃順序決定
    - 実際の戦闘ロジック実行（`execute_battle()`）
    - 戦闘ログの生成と解析
    - キャラクターライフの更新
@@ -287,45 +289,61 @@ Pyxelライブラリを使用したターンベース戦略ゲームです。プ
 ```python
 class BattleStateType(Enum):
     INTRO = "intro"
-    PLAYER_ATTACK = "player_attack"
-    ENEMY_ATTACK = "enemy_attack"
+    INDIVIDUAL_ATTACK = "individual_attack"  # 個別攻撃フェーズ
     RESULTS = "results"
     OUTRO = "outro"
 ```
+
+##### イニシアチブシステム
+
+**イニシアチブ値の設定**
+- **プレイヤー**: 15（高い機動力）
+- **Aggressive AI**: 12（積極的で素早い）
+- **Patrol AI**: 10（標準）
+- **Random AI**: 10（標準）
+- **Defensive AI**: 8（慎重で遅い）
+
+**攻撃順序決定**
+```python
+# 全キャラクターをイニシアチブ順にソート
+all_characters = self.battle_players + self.battle_enemies
+sorted_characters = sorted(all_characters, key=lambda c: c.initiative, reverse=True)
+```
+
+**個別攻撃処理**
+- 各キャラクターが個別に攻撃を実行
+- 攻撃対象は最もライフの少ない敵/味方を自動選択
+- イニシアチブ値が表示され、戦術的な理解を促進
 
 ##### 戦闘状態クラス (`battle_states.py`)
 
 1. **BattleIntroState（戦闘開始状態）**
    - **継続時間**: 2秒（60フレーム）
-   - **責任**: 戦闘開始の告知、初期状態キャプチャ
-   - **遷移先**: `BattlePlayerAttackState`
+   - **責任**: 戦闘開始の告知、イニシアチブ順計算
+   - **表示**: イニシアチブ順序の表示
+   - **遷移先**: `BattleIndividualAttackState`
 
-2. **BattlePlayerAttackState（プレイヤー攻撃状態）**
-   - **継続時間**: 2秒（60フレーム）
-   - **責任**: プレイヤー攻撃演出、ダメージ表示
-   - **視覚効果**: 青色フラッシュ、前進アニメーション
-   - **遷移先**: `BattleEnemyAttackState`
+2. **BattleIndividualAttackState（個別攻撃状態）**
+   - **継続時間**: 2秒（60フレーム）×攻撃者数
+   - **責任**: 個別キャラクターの攻撃演出
+   - **表示**: 攻撃者名、イニシアチブ値、ダメージ
+   - **視覚効果**: 攻撃者に応じた色のフラッシュ
+   - **遷移**: 全攻撃完了まで自身をループ、完了後`BattleResultsState`
 
-3. **BattleEnemyAttackState（敵攻撃状態）**
-   - **継続時間**: 2秒（60フレーム）
-   - **責任**: 敵攻撃演出、ダメージ表示
-   - **視覚効果**: 赤色フラッシュ、前進アニメーション
-   - **遷移先**: `BattleResultsState`
-
-4. **BattleResultsState（結果表示状態）**
+3. **BattleResultsState（結果表示状態）**
    - **継続時間**: 3秒（90フレーム）
    - **責任**: 戦闘結果の表示、兵力情報表示
    - **遷移先**: `BattleOutroState`
 
-5. **BattleOutroState（戦闘終了状態）**
+4. **BattleOutroState（戦闘終了状態）**
    - **継続時間**: 1秒（30フレーム）
    - **責任**: 戦闘終了処理、フェードアウト
    - **遷移先**: サブシーン終了（`None`）
 
 ##### 状態遷移フロー
 ```python
-# 戦闘フェーズ遷移
-BattleIntroState → BattlePlayerAttackState → BattleEnemyAttackState → BattleResultsState → BattleOutroState → 終了
+# イニシアチブベース戦闘フェーズ遷移
+BattleIntroState → BattleIndividualAttackState → (各キャラクター攻撃ループ) → BattleResultsState → BattleOutroState → 終了
 ```
 
 ##### 早期終了システム

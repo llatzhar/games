@@ -59,6 +59,7 @@ class Character:
         speed: float = 1,
         life: int = 100,
         attack: int = 20,
+        initiative: int = 10,
         image_index: int = 0,
     ):
         self.x = x
@@ -77,6 +78,7 @@ class Character:
         self.life = life  # 残兵力（0になると消滅）
         self.max_life = life  # 最大兵力
         self.attack = attack  # 攻撃力
+        self.initiative = initiative  # イニシアチブ値（行動順決定）
 
     def get_hover_info(self) -> List[str]:
         """ホバー時に表示する情報を取得（基底クラスの実装）"""
@@ -85,6 +87,7 @@ class Character:
         info_lines.append(f"Location: {current_city}")
         info_lines.append(f"Life: {self.life}/{self.max_life}")
         info_lines.append(f"Attack: {self.attack}")
+        info_lines.append(f"Initiative: {self.initiative}")
 
         if self.is_moving:
             info_lines.append("Moving...")
@@ -107,6 +110,7 @@ class Character:
             "life": self.life,
             "max_life": self.max_life,
             "attack": self.attack,
+            "initiative": self.initiative,
             "image_index": self.image_index,
         }
 
@@ -126,14 +130,15 @@ class Character:
         self.life = data.get("life", 100)
         self.max_life = data.get("max_life", 100)
         self.attack = data.get("attack", 20)
+        self.initiative = data.get("initiative", 10)
         self.image_index = data.get("image_index", 0)
 
 
 class Player(Character):
-    def __init__(self, x: float, y: float, current_city_id: Optional[int] = None):
+    def __init__(self, x: float, y: float, current_city_id: Optional[int] = None, initiative: int = 15):
         super().__init__(
-            x, y, current_city_id, speed=2, life=120, attack=25, image_index=0
-        )  # 1段目を使用
+            x, y, current_city_id, speed=2, life=120, attack=25, initiative=initiative, image_index=0
+        )  # 1段目を使用、イニシアチブを引数で受け取る
 
     def get_hover_info(self) -> List[str]:
         """プレイヤー用のホバー情報を取得"""
@@ -148,7 +153,8 @@ class Player(Character):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Player":
-        player = cls(data["x"], data["y"], data.get("current_city_id"))
+        initiative = data.get("initiative", 15)  # デフォルトは15
+        player = cls(data["x"], data["y"], data.get("current_city_id"), initiative)
         player.update_from_dict(data)
         return player
 
@@ -162,8 +168,17 @@ class Enemy(Character):
         ai_type: str = "random",
         image_index: int = 1,
     ):
+        # AIタイプに応じてイニシアチブを設定
+        initiative_by_type = {
+            "aggressive": 12,  # 積極的：やや高い
+            "defensive": 8,    # 防御的：低い
+            "patrol": 10,      # パトロール：標準
+            "random": 10,      # ランダム：標準
+        }
+        initiative = initiative_by_type.get(ai_type, 10)
+        
         super().__init__(
-            x, y, current_city_id, speed=1, life=80, attack=20, image_index=image_index
+            x, y, current_city_id, speed=1, life=80, attack=20, initiative=initiative, image_index=image_index
         )  # 2段目以降を使用
         self.ai_type = ai_type
         self.patrol_city_ids: List[int] = []  # 都市IDのリストに変更
@@ -268,6 +283,7 @@ class GameState:
         self.roads = [
             Road(1, 2),  # Central - West
             Road(1, 3),  # Central - East
+            Road(2, 3),  # West - East
             Road(1, 4),  # Central - North
             Road(1, 5),  # Central - South
             Road(2, 5),  # West - South
@@ -279,7 +295,7 @@ class GameState:
         # プレイヤーを作成（タイル(0,0)とタイル(-1,2)に配置）
         self.players = [
             Player(self.cities[1].x, self.cities[1].y, 1),  # Central (0,0)
-            Player(self.cities[2].x, self.cities[2].y, 2),  # West (-1,2)
+            Player(self.cities[2].x, self.cities[2].y, 2, initiative=10),  # West (-1,2)
         ]
 
         # 敵を作成（タイル(1,2)に1体配置）

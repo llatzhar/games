@@ -22,8 +22,7 @@ class BattleStateType(Enum):
     """戦闘シーンの状態タイプ"""
 
     INTRO = "intro"
-    PLAYER_ATTACK = "player_attack"
-    ENEMY_ATTACK = "enemy_attack"
+    INDIVIDUAL_ATTACK = "individual_attack"  # 個別攻撃フェーズ
     RESULTS = "results"
     OUTRO = "outro"
 

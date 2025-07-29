@@ -33,6 +33,12 @@ class BattleSubScene(SubScene):
         # 戦闘ログから情報を抽出
         self.parse_battle_log()
         
+        # イニシアチブ順序管理
+        self.initiative_order = []
+        self.current_attacker_index = 0
+        self.current_attacker = None
+        self.current_attack_damage = 0
+        
         # 初期状態を設定
         self.state_context.change_state(BattleIntroState(self))
 
@@ -52,30 +58,93 @@ class BattleSubScene(SubScene):
             return current_state.state_type.value
         return "unknown"
 
+    def calculate_initiative_order(self):
+        """イニシアチブ順を計算"""
+        all_characters = self.battle_players + self.battle_enemies
+        self.initiative_order = sorted(all_characters, key=lambda c: c.initiative, reverse=True)
+        self.current_attacker_index = 0
+
+    def setup_next_attacker(self):
+        """次の攻撃者を設定"""
+        if self.current_attacker_index >= len(self.initiative_order):
+            return False  # 全ての攻撃が完了
+            
+        self.current_attacker = self.initiative_order[self.current_attacker_index]
+        
+        # 戦闘ログから該当する攻撃のダメージを取得
+        self.current_attack_damage = self.get_damage_for_attacker(self.current_attacker)
+        
+        # ダメージ数値を表示
+        if self.current_attack_damage > 0:
+            attacker_type = "player" if self.current_attacker in self.battle_players else "enemy"
+            self.add_damage_number(self.current_attack_damage, attacker_type)
+        
+        self.current_attacker_index += 1
+        return True
+
+    def get_damage_for_attacker(self, attacker):
+        """特定の攻撃者のダメージを戦闘ログから取得"""
+        for log_entry in self.battle_result["log"]:
+            if attacker in self.battle_players:
+                # プレイヤーの攻撃を探す
+                if f"Player (Init:{attacker.initiative})" in log_entry:
+                    parts = log_entry.split()
+                    for i, part in enumerate(parts):
+                        if part == "dealt" and i + 1 < len(parts):
+                            try:
+                                return int(parts[i + 1])
+                            except ValueError:
+                                pass
+            else:
+                # 敵の攻撃を探す
+                if f"{attacker.ai_type} enemy (Init:{attacker.initiative})" in log_entry:
+                    parts = log_entry.split()
+                    for i, part in enumerate(parts):
+                        if part == "dealt" and i + 1 < len(parts):
+                            try:
+                                return int(parts[i + 1])
+                            except ValueError:
+                                pass
+        return 0
+
     def execute_battle(self):
-        """戦闘を実行して結果を返す"""
+        """戦闘を実行して結果を返す（イニシアチブ順）"""
         battle_log = []
         city_name = self.city.name
 
-        # プレイヤーの攻撃フェーズ
-        total_player_attack = sum(p.attack for p in self.battle_players)
-        if self.battle_enemies:
-            # 最も弱い敵から攻撃
-            target_enemy = min(self.battle_enemies, key=lambda e: e.life)
-            damage = min(total_player_attack, target_enemy.life)
-            target_enemy.life -= damage
-            battle_log.append(
-                f"Players dealt {damage} damage to {target_enemy.ai_type} enemy in {city_name}"
-            )
-
-        # 敵の攻撃フェーズ
-        total_enemy_attack = sum(e.attack for e in self.battle_enemies)
-        if self.battle_players:
-            # 最も弱いプレイヤーから攻撃
-            target_player = min(self.battle_players, key=lambda p: p.life)
-            damage = min(total_enemy_attack, target_player.life)
-            target_player.life -= damage
-            battle_log.append(f"Enemies dealt {damage} damage to player in {city_name}")
+        # 全キャラクターをイニシアチブ順にソート
+        all_characters = self.battle_players + self.battle_enemies
+        sorted_characters = sorted(all_characters, key=lambda c: c.initiative, reverse=True)
+        
+        # イニシアチブ順で攻撃処理
+        for attacker in sorted_characters:
+            if attacker.life <= 0:
+                continue  # 既に倒されている場合はスキップ
+                
+            if attacker in self.battle_players:
+                # プレイヤーの攻撃
+                if self.battle_enemies:
+                    # 生きている敵の中で最も弱い敵を攻撃
+                    alive_enemies = [e for e in self.battle_enemies if e.life > 0]
+                    if alive_enemies:
+                        target_enemy = min(alive_enemies, key=lambda e: e.life)
+                        damage = min(attacker.attack, target_enemy.life)
+                        target_enemy.life -= damage
+                        battle_log.append(
+                            f"Player (Init:{attacker.initiative}) dealt {damage} damage to {target_enemy.ai_type} enemy (Init:{target_enemy.initiative}) in {city_name}"
+                        )
+            else:
+                # 敵の攻撃
+                if self.battle_players:
+                    # 生きているプレイヤーの中で最も弱いプレイヤーを攻撃
+                    alive_players = [p for p in self.battle_players if p.life > 0]
+                    if alive_players:
+                        target_player = min(alive_players, key=lambda p: p.life)
+                        damage = min(attacker.attack, target_player.life)
+                        target_player.life -= damage
+                        battle_log.append(
+                            f"{attacker.ai_type} enemy (Init:{attacker.initiative}) dealt {damage} damage to player (Init:{target_player.initiative}) in {city_name}"
+                        )
 
         return {
             "city_id": self.city.id,
@@ -85,17 +154,25 @@ class BattleSubScene(SubScene):
         }
 
     def parse_battle_log(self):
-        """戦闘ログから表示用の情報を抽出"""
+        """戦闘ログから表示用の情報を抽出（イニシアチブベース）"""
         self.player_damage = 0
         self.enemy_damage = 0
         self.target_enemy_type = "enemy"
 
         for log_entry in self.battle_result["log"]:
-            if "Players dealt" in log_entry:
-                # "Players dealt 25 damage to aggressive enemy in Town A"
+            if "Player (Init:" in log_entry:
+                # "Player (Init:15) dealt 25 damage to aggressive enemy (Init:12) in Town A"
                 parts = log_entry.split()
-                if len(parts) >= 3:
-                    self.player_damage = int(parts[2])
+                damage_index = -1
+                for i, part in enumerate(parts):
+                    if part == "dealt" and i + 1 < len(parts):
+                        try:
+                            self.player_damage += int(parts[i + 1])
+                        except ValueError:
+                            pass
+                        break
+                        
+                # 敵タイプを特定
                 if "aggressive" in log_entry:
                     self.target_enemy_type = "aggressive"
                 elif "patrol" in log_entry:
@@ -105,11 +182,16 @@ class BattleSubScene(SubScene):
                 elif "random" in log_entry:
                     self.target_enemy_type = "random"
 
-            elif "Enemies dealt" in log_entry:
-                # "Enemies dealt 20 damage to player in Town A"
+            elif "enemy (Init:" in log_entry:
+                # "aggressive enemy (Init:12) dealt 20 damage to player (Init:15) in Town A"
                 parts = log_entry.split()
-                if len(parts) >= 3:
-                    self.enemy_damage = int(parts[2])
+                for i, part in enumerate(parts):
+                    if part == "dealt" and i + 1 < len(parts):
+                        try:
+                            self.enemy_damage += int(parts[i + 1])
+                        except ValueError:
+                            pass
+                        break
 
     def update(self):
         self.animation_timer += 1
@@ -165,26 +247,26 @@ class BattleSubScene(SubScene):
             intro_text = "Battle begins!"
             text_width = len(intro_text) * 4
             pyxel.text(info_x - text_width // 2, info_y, intro_text, 11)
+            
+            # イニシアチブ順を表示
+            if hasattr(self, 'initiative_order') and self.initiative_order:
+                order_text = "Initiative Order:"
+                pyxel.text(info_x - len(order_text) * 2, info_y + 20, order_text, 6)
+                for i, char in enumerate(self.initiative_order[:3]):  # 最初の3キャラまで表示
+                    char_type = "Player" if char in self.battle_players else f"{char.ai_type} Enemy"
+                    char_text = f"{char_type} (Init:{char.initiative})"
+                    pyxel.text(info_x - len(char_text) * 2, info_y + 30 + i * 8, char_text, 7)
 
-        elif current_phase == "player_attack":
-            if self.player_damage > 0:
-                attack_text = f"Players attack for {self.player_damage} damage!"
+        elif current_phase == "individual_attack":
+            if hasattr(self, 'current_attacker') and self.current_attacker:
+                if self.current_attacker in self.battle_players:
+                    attack_text = f"Player (Init:{self.current_attacker.initiative}) attacks for {self.current_attack_damage} damage!"
+                    color = 11
+                else:
+                    attack_text = f"{self.current_attacker.ai_type} Enemy (Init:{self.current_attacker.initiative}) attacks for {self.current_attack_damage} damage!"
+                    color = 8
                 text_width = len(attack_text) * 4
-                pyxel.text(info_x - text_width // 2, info_y, attack_text, 11)
-            else:
-                miss_text = "Player attack missed!"
-                text_width = len(miss_text) * 4
-                pyxel.text(info_x - text_width // 2, info_y, miss_text, 8)
-
-        elif current_phase == "enemy_attack":
-            if self.enemy_damage > 0:
-                attack_text = f"Enemies attack for {self.enemy_damage} damage!"
-                text_width = len(attack_text) * 4
-                pyxel.text(info_x - text_width // 2, info_y, attack_text, 8)
-            else:
-                miss_text = "Enemy attack missed!"
-                text_width = len(miss_text) * 4
-                pyxel.text(info_x - text_width // 2, info_y, miss_text, 11)
+                pyxel.text(info_x - text_width // 2, info_y, attack_text, color)
 
         elif current_phase == "results":
             result_text = "Battle concluded"
@@ -317,17 +399,9 @@ class BattleSubScene(SubScene):
         current_phase = self.get_current_phase()
         current_state = self.state_context.current_state
         
-        if (
-            current_phase == "player_attack"
-            and hasattr(character, "attack")
-            and character in self.battle_players
-        ) or (
-            current_phase == "enemy_attack"
-            and hasattr(character, "ai_type")
-            and character in self.battle_enemies
-        ):
-            # 攻撃時は少し前に出る
-            if current_state and current_state.get_elapsed_time() < 20:
+        if current_phase == "individual_attack" and hasattr(self, 'current_attacker') and self.current_attacker:
+            if character == self.current_attacker and current_state and current_state.get_elapsed_time() < 20:
+                # 攻撃時は少し前に出る
                 offset_x = 5 if facing_right else -5
                 x += offset_x
 
@@ -369,19 +443,16 @@ class BattleSubScene(SubScene):
         current_phase = self.get_current_phase()
         current_state = self.state_context.current_state
         
-        if current_phase == "player_attack" and self.player_damage > 0:
-            # プレイヤー攻撃エフェクト（青色の閃光）
-            if current_state and current_state.get_elapsed_time() < 30:
+        if current_phase == "individual_attack" and hasattr(self, 'current_attacker') and self.current_attacker:
+            if current_state and current_state.get_elapsed_time() < 30 and self.current_attack_damage > 0:
                 flash_intensity = max(0, 30 - current_state.get_elapsed_time())
                 if flash_intensity > 15:
-                    pyxel.rect(0, 0, pyxel.width, pyxel.height, 12)
-
-        elif current_phase == "enemy_attack" and self.enemy_damage > 0:
-            # 敵攻撃エフェクト（赤色の閃光）
-            if current_state and current_state.get_elapsed_time() < 30:
-                flash_intensity = max(0, 30 - current_state.get_elapsed_time())
-                if flash_intensity > 15:
-                    pyxel.rect(0, 0, pyxel.width, pyxel.height, 8)
+                    if self.current_attacker in self.battle_players:
+                        # プレイヤー攻撃: 青色閃光
+                        pyxel.rect(0, 0, pyxel.width, pyxel.height, 12)
+                    else:
+                        # 敵攻撃: 赤色閃光
+                        pyxel.rect(0, 0, pyxel.width, pyxel.height, 8)
 
     def get_displayed_life(self, character, initial_life, character_type):
         """戦闘の進行に応じて表示するライフ値を計算"""

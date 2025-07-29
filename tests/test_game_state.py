@@ -82,6 +82,7 @@ class TestPlayer(unittest.TestCase):
         self.assertEqual(player.life, 120)
         self.assertEqual(player.max_life, 120)
         self.assertEqual(player.attack, 25)
+        self.assertEqual(player.initiative, 15)
         self.assertEqual(player.image_index, 0)
         self.assertFalse(player.is_moving)
 
@@ -93,6 +94,7 @@ class TestPlayer(unittest.TestCase):
         self.assertIn("Location: 1", info)
         self.assertIn("Life: 120/120", info)
         self.assertIn("Attack: 25", info)
+        self.assertIn("Initiative: 15", info)
 
     def test_player_serialization(self):
         """プレイヤーのシリアライゼーションテスト"""
@@ -124,17 +126,25 @@ class TestEnemy(unittest.TestCase):
         self.assertEqual(enemy.life, 80)
         self.assertEqual(enemy.max_life, 80)
         self.assertEqual(enemy.attack, 20)
+        self.assertEqual(enemy.initiative, 12)  # aggressive のイニシアチブ
         self.assertEqual(enemy.image_index, 1)
         self.assertEqual(enemy.patrol_city_ids, [])
         self.assertEqual(enemy.patrol_index, 0)
         self.assertIsNone(enemy.last_player_position)
 
-    def test_enemy_ai_types(self):
-        """敵AIタイプのテスト"""
-        ai_types = ["aggressive", "patrol", "defensive", "random"]
-        for ai_type in ai_types:
+    def test_enemy_ai_types_and_initiative(self):
+        """敵AIタイプとイニシアチブのテスト"""
+        ai_initiative_map = {
+            "aggressive": 12,
+            "patrol": 10,
+            "defensive": 8,
+            "random": 10,
+        }
+        
+        for ai_type, expected_initiative in ai_initiative_map.items():
             enemy = Enemy(0, 0, None, ai_type)
             self.assertEqual(enemy.ai_type, ai_type)
+            self.assertEqual(enemy.initiative, expected_initiative)
 
     def test_enemy_hover_info(self):
         """敵のホバー情報テスト"""
@@ -142,11 +152,13 @@ class TestEnemy(unittest.TestCase):
         info = enemy.get_hover_info()
         self.assertIn("Enemy (aggressive)", info)
         self.assertIn("Pursues players", info)
+        self.assertIn("Initiative: 12", info)
 
         # パトロールタイプの説明テスト
         patrol_enemy = Enemy(0, 0, None, "patrol")
         patrol_info = patrol_enemy.get_hover_info()
         self.assertIn("Patrols route", patrol_info)
+        self.assertIn("Initiative: 10", patrol_info)
 
     def test_enemy_serialization(self):
         """敵のシリアライゼーションテスト"""

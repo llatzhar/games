@@ -13,6 +13,8 @@ class BattleIntroState(BattleGameState):
         super().enter()
         # 戦闘開始時の状態をキャプチャ
         self.context.capture_initial_state()
+        # イニシアチブ順を計算
+        self.context.calculate_initiative_order()
 
     def update(self):
         # 早期終了チェック
@@ -21,7 +23,7 @@ class BattleIntroState(BattleGameState):
             
         # 2秒経過で次のフェーズに遷移
         if self.get_elapsed_time() >= 60:  # 2秒
-            self.transition_to(BattlePlayerAttackState(self.context))
+            self.transition_to(BattleIndividualAttackState(self.context))
         return self.context
 
     def handle_input(self):
@@ -33,57 +35,32 @@ class BattleIntroState(BattleGameState):
         pass
 
 
-class BattlePlayerAttackState(BattleGameState):
-    """プレイヤー攻撃フェーズ状態"""
+class BattleIndividualAttackState(BattleGameState):
+    """個別攻撃フェーズ状態"""
 
     def __init__(self, context):
-        super().__init__(context, BattleStateType.PLAYER_ATTACK)
+        super().__init__(context, BattleStateType.INDIVIDUAL_ATTACK)
 
     def enter(self):
         super().enter()
-        # プレイヤーダメージ数値を追加
-        if self.context.player_damage > 0:
-            self.context.add_damage_number(self.context.player_damage, "player")
-
-    def update(self):
-        # 早期終了チェック
-        if hasattr(self.context, 'early_exit') and self.context.early_exit:
-            return None
-            
-        # 2秒経過で次のフェーズに遷移
-        if self.get_elapsed_time() >= 60:  # 2秒
-            self.transition_to(BattleEnemyAttackState(self.context))
-        return self.context
-
-    def handle_input(self):
-        # ESCまたはスペースで早期終了
-        if pyxel.btnp(pyxel.KEY_ESCAPE) or pyxel.btnp(pyxel.KEY_SPACE):
-            self.context.early_exit = True
-
-    def exit(self):
-        pass
-
-
-class BattleEnemyAttackState(BattleGameState):
-    """敵攻撃フェーズ状態"""
-
-    def __init__(self, context):
-        super().__init__(context, BattleStateType.ENEMY_ATTACK)
-
-    def enter(self):
-        super().enter()
-        # 敵ダメージ数値を追加
-        if self.context.enemy_damage > 0:
-            self.context.add_damage_number(self.context.enemy_damage, "enemy")
-
-    def update(self):
-        # 早期終了チェック
-        if hasattr(self.context, 'early_exit') and self.context.early_exit:
-            return None
-            
-        # 2秒経過で次のフェーズに遷移
-        if self.get_elapsed_time() >= 60:  # 2秒
+        # 次の攻撃者を設定
+        if not self.context.setup_next_attacker():
+            # 全ての攻撃が完了した場合
             self.transition_to(BattleResultsState(self.context))
+
+    def update(self):
+        # 早期終了チェック
+        if hasattr(self.context, 'early_exit') and self.context.early_exit:
+            return None
+            
+        # 2秒経過で次の攻撃者に移行
+        if self.get_elapsed_time() >= 60:  # 2秒
+            if self.context.setup_next_attacker():
+                # 次の攻撃者がいる場合、状態を再開始
+                self.transition_to(BattleIndividualAttackState(self.context))
+            else:
+                # 全ての攻撃が完了
+                self.transition_to(BattleResultsState(self.context))
         return self.context
 
     def handle_input(self):
