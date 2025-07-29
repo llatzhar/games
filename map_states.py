@@ -373,11 +373,10 @@ class BattleSequenceState(MapGameState):
         """現在の戦闘のBattleSubSceneを開始"""
         current_battle = self.battle_locations[self.current_battle_index]
         city_id = current_battle["city_id"]
-        city = self.context.game_state.get_city_by_id(city_id)
 
-        if city:
-            battle_sub_scene = BattleSubScene(self.context, current_battle, city)
-            self.context.set_sub_scene(battle_sub_scene)
+        # GameStateの参照を直接渡す
+        battle_sub_scene = BattleSubScene(self.context, city_id, self.context.game_state)
+        self.context.set_sub_scene(battle_sub_scene)
 
     def on_battle_finished(self):
         """戦闘終了時の処理"""

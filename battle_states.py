@@ -11,10 +11,7 @@ class BattleIntroState(BattleGameState):
 
     def enter(self):
         super().enter()
-        # 戦闘開始時の状態をキャプチャ
-        self.context.capture_initial_state()
-        # イニシアチブ順を計算
-        self.context.calculate_initiative_order()
+        # イニシアチブ順を計算（既に__init__で実行済み）
 
     def update(self):
         # 早期終了チェック
@@ -47,6 +44,9 @@ class BattleIndividualAttackState(BattleGameState):
         if not self.context.setup_next_attacker():
             # 全ての攻撃が完了した場合
             self.transition_to(BattleResultsState(self.context))
+        else:
+            # 攻撃を実行してGameStateを更新
+            self.context.execute_attack()
 
     def update(self):
         # 早期終了チェック

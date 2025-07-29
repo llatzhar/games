@@ -6,10 +6,11 @@ from battle_states import BattleIntroState
 
 
 class BattleSubScene(SubScene):
-    def __init__(self, parent_scene, battle_info, city):
+    def __init__(self, parent_scene, city_id: int, game_state):
         super().__init__(parent_scene)
-        self.battle_info = battle_info  # 戦闘場所情報（まだ戦闘は実行されていない）
-        self.city = city
+        self.city_id = city_id
+        self.game_state = game_state  # GameStateの直接参照
+        self.city = game_state.get_city_by_id(city_id)
         self.animation_timer = 0
         self.max_animation_time = 240  # 8秒間（30fps * 8秒）
         
@@ -19,19 +20,12 @@ class BattleSubScene(SubScene):
         
         self.damage_numbers = []  # ダメージ表示用
 
-        # 戦闘に参加するキャラクター（戦闘開始時の状態をキャプチャ）
-        self.battle_players = battle_info["players"]
-        self.battle_enemies = battle_info["enemies"]
+        # 戦闘に参加するキャラクター（GameStateから直接参照）
+        self.battle_players, self.battle_enemies = game_state.get_characters_in_city(city_id)
 
-        # 戦闘開始時のライフを記録（戦闘前の状態を保存）
-        self.initial_player_lives = []
-        self.initial_enemy_lives = []
-
-        # 戦闘計算を実行（ここで初めて実際の戦闘を行う）
-        self.battle_result = self.execute_battle()
-
-        # 戦闘ログから情報を抽出
-        self.parse_battle_log()
+        # 戦闘開始時のライフを記録（表示用）
+        self.initial_player_lives = [p.life for p in self.battle_players]
+        self.initial_enemy_lives = [e.life for e in self.battle_enemies]
         
         # イニシアチブ順序管理
         self.initiative_order = []
@@ -39,13 +33,11 @@ class BattleSubScene(SubScene):
         self.current_attacker = None
         self.current_attack_damage = 0
         
+        # イニシアチブ順を計算
+        self.calculate_initiative_order()
+        
         # 初期状態を設定
         self.state_context.change_state(BattleIntroState(self))
-
-    def capture_initial_state(self):
-        """戦闘開始時の状態をキャプチャ"""
-        self.initial_player_lives = [p.life for p in self.battle_players]
-        self.initial_enemy_lives = [e.life for e in self.battle_enemies]
 
     def change_state(self, new_state):
         """状態変更（状態マシンとの連携）"""
@@ -70,92 +62,40 @@ class BattleSubScene(SubScene):
             return False  # 全ての攻撃が完了
             
         self.current_attacker = self.initiative_order[self.current_attacker_index]
-        
-        # 戦闘ログから該当する攻撃のダメージを取得
-        self.current_attack_damage = self.get_damage_for_attacker(self.current_attacker)
-        
-        # ダメージ数値を表示
-        if self.current_attack_damage > 0:
-            attacker_type = "player" if self.current_attacker in self.battle_players else "enemy"
-            self.add_damage_number(self.current_attack_damage, attacker_type)
-        
         self.current_attacker_index += 1
         return True
 
-    def get_damage_for_attacker(self, attacker):
-        """特定の攻撃者のダメージを戦闘ログから取得"""
-        for log_entry in self.battle_result["log"]:
-            if attacker in self.battle_players:
-                # プレイヤーの攻撃を探す
-                if f"Player (Init:{attacker.initiative})" in log_entry:
-                    parts = log_entry.split()
-                    for i, part in enumerate(parts):
-                        if part == "dealt" and i + 1 < len(parts):
-                            try:
-                                return int(parts[i + 1])
-                            except ValueError:
-                                pass
-            else:
-                # 敵の攻撃を探す
-                if f"{attacker.ai_type} enemy (Init:{attacker.initiative})" in log_entry:
-                    parts = log_entry.split()
-                    for i, part in enumerate(parts):
-                        if part == "dealt" and i + 1 < len(parts):
-                            try:
-                                return int(parts[i + 1])
-                            except ValueError:
-                                pass
-        return 0
-
-    def execute_battle(self):
-        """戦闘を実行して結果を返す（イニシアチブ順）"""
-        battle_log = []
-        city_name = self.city.name
-
-        # 全キャラクターをイニシアチブ順にソート
-        all_characters = self.battle_players + self.battle_enemies
-        sorted_characters = sorted(all_characters, key=lambda c: c.initiative, reverse=True)
-        
-        # イニシアチブ順で攻撃処理
-        for attacker in sorted_characters:
-            if attacker.life <= 0:
-                continue  # 既に倒されている場合はスキップ
+    def execute_attack(self):
+        """現在の攻撃者で攻撃を実行し、GameStateを直接更新"""
+        if not self.current_attacker or self.current_attacker.life <= 0:
+            return 0
+            
+        damage = 0
+        if self.current_attacker in self.battle_players:
+            # プレイヤーの攻撃
+            alive_enemies = [e for e in self.battle_enemies if e.life > 0]
+            if alive_enemies:
+                target = min(alive_enemies, key=lambda e: e.life)
+                damage = min(self.current_attacker.attack, target.life)
+                target.life = max(0, target.life - damage)
                 
-            if attacker in self.battle_players:
-                # プレイヤーの攻撃
-                if self.battle_enemies:
-                    # 生きている敵の中で最も弱い敵を攻撃
-                    alive_enemies = [e for e in self.battle_enemies if e.life > 0]
-                    if alive_enemies:
-                        target_enemy = min(alive_enemies, key=lambda e: e.life)
-                        damage = min(attacker.attack, target_enemy.life)
-                        target_enemy.life -= damage
-                        battle_log.append(
-                            f"Player (Init:{attacker.initiative}) dealt {damage} damage to {target_enemy.ai_type} enemy (Init:{target_enemy.initiative}) in {city_name}"
-                        )
-            else:
-                # 敵の攻撃
-                if self.battle_players:
-                    # 生きているプレイヤーの中で最も弱いプレイヤーを攻撃
-                    alive_players = [p for p in self.battle_players if p.life > 0]
-                    if alive_players:
-                        target_player = min(alive_players, key=lambda p: p.life)
-                        damage = min(attacker.attack, target_player.life)
-                        target_player.life -= damage
-                        battle_log.append(
-                            f"{attacker.ai_type} enemy (Init:{attacker.initiative}) dealt {damage} damage to player (Init:{target_player.initiative}) in {city_name}"
-                        )
-
-        return {
-            "city_id": self.city.id,
-            "log": battle_log,
-            "players_before": len(self.battle_players),
-            "enemies_before": len(self.battle_enemies),
-        }
-
-    def parse_battle_log(self):
-        """戦闘ログから表示用の情報を抽出（イニシアチブベース）"""
-        self.player_damage = 0
+                # ダメージ表示
+                if damage > 0:
+                    self.add_damage_number(damage, "player")
+        else:
+            # 敵の攻撃
+            alive_players = [p for p in self.battle_players if p.life > 0]
+            if alive_players:
+                target = min(alive_players, key=lambda p: p.life)
+                damage = min(self.current_attacker.attack, target.life)
+                target.life = max(0, target.life - damage)
+                
+                # ダメージ表示
+                if damage > 0:
+                    self.add_damage_number(damage, "enemy")
+        
+        self.current_attack_damage = damage
+        return damage
         self.enemy_damage = 0
         self.target_enemy_type = "enemy"
 
@@ -273,10 +213,10 @@ class BattleSubScene(SubScene):
             text_width = len(result_text) * 4
             pyxel.text(info_x - text_width // 2, info_y, result_text, 10)
 
-            # 戦闘前後の兵力表示
-            players_count = self.battle_result["players_before"]
-            enemies_count = self.battle_result["enemies_before"]
-            battle_summary = f"Players: {players_count}, Enemies: {enemies_count}"
+            # 現在の兵力表示
+            alive_players = len([p for p in self.battle_players if p.life > 0])
+            alive_enemies = len([e for e in self.battle_enemies if e.life > 0])
+            battle_summary = f"Players: {alive_players}, Enemies: {alive_enemies}"
             summary_width = len(battle_summary) * 4
             pyxel.text(info_x - summary_width // 2, info_y + 20, battle_summary, 6)
 

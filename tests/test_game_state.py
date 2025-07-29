@@ -219,13 +219,17 @@ class TestGameState(unittest.TestCase):
         self.assertEqual(len(self.game_state.cities), 6)
 
         # 道路数チェック
-        self.assertEqual(len(self.game_state.roads), 8)
+        self.assertEqual(len(self.game_state.roads), 9)
 
         # プレイヤー数チェック
         self.assertEqual(len(self.game_state.players), 2)
 
         # 敵数チェック
         self.assertEqual(len(self.game_state.enemies), 1)
+
+        # プレイヤーのイニシアチブ値チェック
+        self.assertEqual(self.game_state.players[0].initiative, 15)  # Player 1 デフォルト
+        self.assertEqual(self.game_state.players[1].initiative, 10)  # Player 2 カスタム
 
         # 都市の存在確認
         city_names = [city.name for city in self.game_state.cities.values()]
