@@ -52,6 +52,12 @@ class MapScene(Scene):
         self.camera_offset_x = screen_width // 2  # カメラの中央オフセット
         self.camera_offset_y = screen_height // 2  # カメラの中央オフセット
 
+        # プレイヤーの位置に基づいてカメラの初期位置を設定
+        if self.game_state.players:
+            first_player = self.game_state.players[0]
+            self.camera_x = first_player.x - self.camera_offset_x
+            self.camera_y = first_player.y - self.camera_offset_y
+
         # マウスカーソルを表示
         pyxel.mouse(True)
 
