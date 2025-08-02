@@ -1,8 +1,53 @@
 ﻿# PowerShell テスト実行スクリプト
+#Requires -Version 5.1
+[CmdletBinding()]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs', '', Justification='This is a build script with specific naming conventions')]
 param(
     [string]$Command = "help"
 )
+
+# 実行ポリシーチェックと自動対応
+function Test-ExecutionPolicy {
+    $currentPolicy = Get-ExecutionPolicy
+    if ($currentPolicy -eq "Restricted") {
+        Write-Host "警告: PowerShellの実行ポリシーが制限されています。" -ForegroundColor Yellow
+        Write-Host "現在のポリシー: $currentPolicy" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "自動的に実行ポリシーを変更しますか？ (Y/N)" -ForegroundColor Yellow
+        $response = Read-Host
+        
+        if ($response -eq "Y" -or $response -eq "y" -or $response -eq "yes") {
+            try {
+                Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+                Write-Host "実行ポリシーを RemoteSigned に変更しました。" -ForegroundColor Green
+                return $true
+            }
+            catch {
+                Write-Host "エラー: 実行ポリシーの変更に失敗しました。" -ForegroundColor Red
+                Write-Host "管理者権限で以下のコマンドを実行してください:" -ForegroundColor Yellow
+                Write-Host "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Cyan
+                return $false
+            }
+        } else {
+            Write-Host "実行ポリシーの変更をスキップしました。" -ForegroundColor Yellow
+            Write-Host "手動で以下のコマンドを実行してください:" -ForegroundColor Yellow
+            Write-Host "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Cyan
+            return $false
+        }
+    } elseif ($currentPolicy -eq "AllSigned" -or $currentPolicy -eq "RemoteSigned" -or $currentPolicy -eq "Unrestricted") {
+        Write-Host "実行ポリシー確認: $currentPolicy (OK)" -ForegroundColor Green
+        return $true
+    } else {
+        Write-Host "警告: 予期しない実行ポリシー: $currentPolicy" -ForegroundColor Yellow
+        return $true
+    }
+}
+
+# 初期化時に実行ポリシーをチェック
+if (-not (Test-ExecutionPolicy)) {
+    Write-Host "実行ポリシーの問題により、スクリプトを正常に実行できない可能性があります。" -ForegroundColor Red
+    Write-Host ""
+}
 
 function Show-Help {
     Write-Host "利用可能なコマンド:" -ForegroundColor Green

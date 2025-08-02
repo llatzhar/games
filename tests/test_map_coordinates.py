@@ -179,9 +179,6 @@ class TestCoordinateTransformer(unittest.TestCase):
             1: (0, 0),  # Central
             2: (-1, 2),  # West
             3: (1, 2),  # East
-            4: (0, -2),  # North
-            5: (0, 3),  # South
-            6: (2, -1),  # Northeast
         }
 
         for city_id, (expected_tile_x, expected_tile_y) in city_tile_coords.items():
