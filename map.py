@@ -9,6 +9,7 @@ from cutin import CutinSubScene
 # game.pyから定数をインポート
 from game import Scene, screen_height, screen_width
 from game_state import City, GameState
+from geometry_utils import line_intersects_line
 from hover_info import HoverInfo
 from map_state_machine import StateContext
 from map_states import PlayerTurnState
@@ -526,29 +527,19 @@ class MapScene(Scene):
 
         # より詳細な線分交差判定（線分が画面境界と交差するかチェック）
         return (
-            self.line_intersects_line(
+            line_intersects_line(
                 x1, y1, x2, y2, screen_left, screen_top, screen_right, screen_top
             )  # 上辺
-            or self.line_intersects_line(
+            or line_intersects_line(
                 x1, y1, x2, y2, screen_right, screen_top, screen_right, screen_bottom
             )  # 右辺
-            or self.line_intersects_line(
+            or line_intersects_line(
                 x1, y1, x2, y2, screen_right, screen_bottom, screen_left, screen_bottom
             )  # 下辺
-            or self.line_intersects_line(
+            or line_intersects_line(
                 x1, y1, x2, y2, screen_left, screen_bottom, screen_left, screen_top
             )
         )  # 左辺
-
-    def line_intersects_line(self, x1, y1, x2, y2, x3, y3, x4, y4):
-        """2つの線分が交差するかチェック"""
-
-        def ccw(ax, ay, bx, by, cx, cy):
-            return (cy - ay) * (bx - ax) > (by - ay) * (cx - ax)
-
-        return ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4) and ccw(
-            x1, y1, x2, y2, x3, y3
-        ) != ccw(x1, y1, x2, y2, x4, y4)
 
     def start_battle_sequence(self, battle_locations):
         """戦闘シーケンスを開始"""

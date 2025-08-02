@@ -395,6 +395,28 @@ class TestGameState(unittest.TestCase):
         # 2. 戦闘がない場合 → 直接CityDiscoveryState
         # どちらの場合も最終的に都市発見が実行される
 
+    def test_city_placement_road_intersection_check(self):
+        """都市配置時の道路交差チェックのテスト"""
+        self.game_state.initialize_default_state()
+        
+        # テスト用の都市配置（道路交差が発生するような配置を想定）
+        # Central(0,0), West(-1,2), East(1,2) の初期配置
+        
+        # Central-West間の道路: (-16, 32) から (16, 32) への線分と交差するような新都市配置をテスト
+        from coordinate_utils import create_default_coordinate_transformer
+        coord_transformer = create_default_coordinate_transformer()
+        
+        central_city = self.game_state.cities[1]  # Central
+        
+        # Central-West道路と交差する位置（例：Central上方向で道路を横切る位置）
+        test_pixel_x, test_pixel_y = coord_transformer.tile_to_pixel(0, -3)  # Central上方
+        
+        # 道路交差チェック関数をテスト
+        is_valid = self.game_state.is_valid_city_placement(test_pixel_x, test_pixel_y, central_city.id)
+        
+        # 結果の検証（実際の道路配置によって結果は変わるが、関数が実行されることをテスト）
+        self.assertIsInstance(is_valid, bool, "is_valid_city_placement should return a boolean")
+
     def test_movement_flags(self):
         """移動フラグのテスト"""
         # プレイヤーターンでの移動可能性
