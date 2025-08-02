@@ -215,11 +215,11 @@ class TestGameState(unittest.TestCase):
         """デフォルト状態の初期化テスト"""
         self.game_state.initialize_default_state()
 
-        # 都市数チェック
-        self.assertEqual(len(self.game_state.cities), 6)
+        # 都市数チェック（3都市）
+        self.assertEqual(len(self.game_state.cities), 3)
 
-        # 道路数チェック
-        self.assertEqual(len(self.game_state.roads), 9)
+        # 道路数チェック（3都市の三角形 = 3本の道路）
+        self.assertEqual(len(self.game_state.roads), 3)
 
         # プレイヤー数チェック
         self.assertEqual(len(self.game_state.players), 2)
@@ -235,7 +235,7 @@ class TestGameState(unittest.TestCase):
 
         # 都市の存在確認
         city_names = [city.name for city in self.game_state.cities.values()]
-        expected_cities = ["Central", "West", "East", "North", "South", "Northeast"]
+        expected_cities = ["Central", "West", "East"]
         for city_name in expected_cities:
             self.assertIn(city_name, city_names)
 
@@ -265,17 +265,19 @@ class TestGameState(unittest.TestCase):
         self.game_state.initialize_default_state()
 
         # 接続されている都市のテスト
-        self.assertTrue(self.game_state.are_cities_connected(1, 2))  # Kiyosu - Nagoya
+        self.assertTrue(self.game_state.are_cities_connected(1, 2))  # Central - West
         self.assertTrue(self.game_state.are_cities_connected(2, 1))  # 逆方向も確認
+        self.assertTrue(self.game_state.are_cities_connected(1, 3))  # Central - East
+        self.assertTrue(self.game_state.are_cities_connected(2, 3))  # West - East
 
-        # 接続されていない都市のテスト（直接は接続されていない）
+        # 存在しない都市との接続テスト
         self.assertFalse(
-            self.game_state.are_cities_connected(1, 6)
-        )  # Central - Northeast
+            self.game_state.are_cities_connected(1, 4)
+        )  # Central - 存在しない都市4
 
         # 接続都市リストの取得
         connected_to_central = self.game_state.get_connected_city_ids(1)
-        expected_connections = [2, 3, 4, 5]  # West, East, North, South
+        expected_connections = [2, 3]  # West, East
         self.assertEqual(set(connected_to_central), set(expected_connections))
 
     def test_turn_switching(self):
@@ -513,7 +515,7 @@ class TestCoordinateTransformation(unittest.TestCase):
         """タイル座標から物理座標への変換テスト"""
         self.game_state.initialize_default_state()
 
-        # 中央座標系の検証
+        # 中央座標系の検証（3都市のみ）
         # タイル(0,0) → 物理座標(256,256) - マップの中央
         central_city = self.game_state.cities[1]  # Central
         self.assertEqual(central_city.name, "Central")
@@ -531,24 +533,6 @@ class TestCoordinateTransformation(unittest.TestCase):
         self.assertEqual(east_city.name, "East")
         self.assertEqual(east_city.x, 288.0)
         self.assertEqual(east_city.y, 320.0)
-
-        # タイル(0,-2) → 物理座標(256,192) - North
-        north_city = self.game_state.cities[4]  # North
-        self.assertEqual(north_city.name, "North")
-        self.assertEqual(north_city.x, 256.0)
-        self.assertEqual(north_city.y, 192.0)
-
-        # タイル(0,3) → 物理座標(256,352) - South
-        south_city = self.game_state.cities[5]  # South
-        self.assertEqual(south_city.name, "South")
-        self.assertEqual(south_city.x, 256.0)
-        self.assertEqual(south_city.y, 352.0)
-
-        # タイル(2,-1) → 物理座標(320,224) - Northeast
-        northeast_city = self.game_state.cities[6]  # Northeast
-        self.assertEqual(northeast_city.name, "Northeast")
-        self.assertEqual(northeast_city.x, 320.0)
-        self.assertEqual(northeast_city.y, 224.0)
 
     def test_character_positioning_in_coordinate_system(self):
         """中央座標系でのキャラクター配置テスト"""

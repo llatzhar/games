@@ -277,7 +277,7 @@ class GameState:
         # 座標変換器を使用
         coord_transformer = create_default_coordinate_transformer()
 
-        # 都市を作成（中央座標系を使用）
+        # 都市を作成（中央座標系を使用）- 3つのみ
         self.cities = {
             1: City(
                 1, "Central", *coord_transformer.tile_to_pixel(0, 0)
@@ -288,37 +288,22 @@ class GameState:
             3: City(
                 3, "East", *coord_transformer.tile_to_pixel(1, 2)
             ),  # タイル(1,2) → 物理座標(288,320)
-            4: City(
-                4, "North", *coord_transformer.tile_to_pixel(0, -2)
-            ),  # タイル(0,-2) → 物理座標(256,192)
-            5: City(
-                5, "South", *coord_transformer.tile_to_pixel(0, 3)
-            ),  # タイル(0,3) → 物理座標(256,352)
-            6: City(
-                6, "Northeast", *coord_transformer.tile_to_pixel(2, -1)
-            ),  # タイル(2,-1) → 物理座標(320,224)
         }
 
-        # 道路を作成（都市IDを使用）
+        # 道路を作成（都市IDを使用）- 3都市の三角形構成
         self.roads = [
             Road(1, 2),  # Central - West
             Road(1, 3),  # Central - East
             Road(2, 3),  # West - East
-            Road(1, 4),  # Central - North
-            Road(1, 5),  # Central - South
-            Road(2, 5),  # West - South
-            Road(3, 5),  # East - South
-            Road(3, 6),  # East - Northeast
-            Road(4, 6),  # North - Northeast
         ]
 
-        # プレイヤーを作成（タイル(0,0)とタイル(-1,2)に配置）
+        # プレイヤーを作成（Central と West に配置）
         self.players = [
             Player(self.cities[1].x, self.cities[1].y, 1),  # Central (0,0)
             Player(self.cities[2].x, self.cities[2].y, 2, initiative=10),  # West (-1,2)
         ]
 
-        # 敵を作成（タイル(1,2)に1体配置）
+        # 敵を作成（East に1体配置）
         enemy1 = Enemy(
             self.cities[3].x, self.cities[3].y, 3, "aggressive", 1
         )  # East (1,2)
