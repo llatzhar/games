@@ -4,7 +4,7 @@ import random
 from typing import Any, Dict, List, Optional
 
 from coordinate_utils import create_default_coordinate_transformer
-from geometry_utils import roads_intersect, point_too_close_to_line
+from geometry_utils import point_too_close_to_line, roads_intersect
 
 # 都市発見の設定
 CITY_DISCOVERY_INTERVAL = 1  # nターンごとに新都市発見（n=1で毎ターン）
@@ -355,7 +355,7 @@ class GameState:
             self.enemy_moved_this_turn = False
             self.turn_counter += 1
             self.ai_timer = 0
-            
+
             # 都市発見は別の状態で処理するためここでは実行しない
 
     def can_move_this_turn(self) -> bool:
@@ -372,22 +372,24 @@ class GameState:
     def is_valid_city_placement(self, new_city_x, new_city_y, source_city_id):
         """新しい都市の配置が有効かチェック（道路交差や都市との距離をチェック）"""
         source_city = self.cities[source_city_id]
-        
+
         # 新しい道路の座標
         new_road_start = (source_city.x, source_city.y)
         new_road_end = (new_city_x, new_city_y)
-        
+
         # 既存の道路との交差をチェック
         for road in self.roads:
             city1 = self.cities[road.city1_id]
             city2 = self.cities[road.city2_id]
             existing_road_start = (city1.x, city1.y)
             existing_road_end = (city2.x, city2.y)
-            
+
             # 新しい道路が既存の道路と交差するかチェック
-            if roads_intersect(new_road_start, new_road_end, existing_road_start, existing_road_end):
+            if roads_intersect(
+                new_road_start, new_road_end, existing_road_start, existing_road_end
+            ):
                 return False
-        
+
         # 新しい都市が既存の道路に近すぎないかチェック
         min_distance_to_road = 20  # 最小距離（ピクセル）
         for road in self.roads:
@@ -395,48 +397,54 @@ class GameState:
             city2 = self.cities[road.city2_id]
             existing_road_start = (city1.x, city1.y)
             existing_road_end = (city2.x, city2.y)
-            
+
             # 新しい都市が既存の道路に近すぎる場合は無効
-            if point_too_close_to_line(new_city_x, new_city_y, existing_road_start, existing_road_end, min_distance_to_road):
+            if point_too_close_to_line(
+                new_city_x,
+                new_city_y,
+                existing_road_start,
+                existing_road_end,
+                min_distance_to_road,
+            ):
                 return False
-        
+
         # 新しい都市が既存の都市に近すぎないかチェック
         min_distance_to_city = 30  # 最小距離（ピクセル）
         for city in self.cities.values():
             if city.id != source_city_id:  # 接続元の都市は除外
                 distance_sq = (new_city_x - city.x) ** 2 + (new_city_y - city.y) ** 2
-                if distance_sq < min_distance_to_city ** 2:
+                if distance_sq < min_distance_to_city**2:
                     return False
-        
+
         return True
 
     def discover_new_city(self):
         """新しい都市を発見して追加"""
         if not self.cities:
             return None  # 既存都市がない場合は何もしない
-        
+
         coord_transformer = create_default_coordinate_transformer()
-        
+
         # 候補位置を生成（既存都市から距離3の位置）
         candidate_positions = []
         occupied_positions = set()
-        
+
         # 既存都市の位置を記録
         for city in self.cities.values():
             tile_x, tile_y = coord_transformer.pixel_to_tile(city.x, city.y)
             occupied_positions.add((tile_x, tile_y))
-        
+
         # 都市をランダムな順序でシャッフル（完全ランダム選択のため）
         cities_list = list(self.cities.values())
         random.shuffle(cities_list)
-        
+
         # 各既存都市から距離3の位置を候補に追加（シャッフル済み順序で）
         # 各都市から最大candidate_per_city個の候補を収集してバランスを取る
         candidate_per_city = 8  # 各都市から最大8個の候補位置
         for city in cities_list:
             city_candidates = []
             base_tile_x, base_tile_y = coord_transformer.pixel_to_tile(city.x, city.y)
-            
+
             # 距離3の円周上の位置を生成
             for dx in range(-CITY_DISCOVERY_DISTANCE, CITY_DISCOVERY_DISTANCE + 1):
                 for dy in range(-CITY_DISCOVERY_DISTANCE, CITY_DISCOVERY_DISTANCE + 1):
@@ -444,64 +452,133 @@ class GameState:
                     if abs(dx) + abs(dy) == CITY_DISCOVERY_DISTANCE:
                         candidate_x = base_tile_x + dx
                         candidate_y = base_tile_y + dy
-                        
+
                         # 既存都市と重複しない位置のみ追加
                         if (candidate_x, candidate_y) not in occupied_positions:
                             # ピクセル座標に変換
-                            pixel_x, pixel_y = coord_transformer.tile_to_pixel(candidate_x, candidate_y)
-                            
+                            pixel_x, pixel_y = coord_transformer.tile_to_pixel(
+                                candidate_x, candidate_y
+                            )
+
                             # 道路交差や距離チェックを実行
                             if self.is_valid_city_placement(pixel_x, pixel_y, city.id):
-                                city_candidates.append((candidate_x, candidate_y, city.id))
-            
+                                city_candidates.append(
+                                    (candidate_x, candidate_y, city.id)
+                                )
+
             # この都市から最大candidate_per_city個の候補をランダム選択
             if city_candidates:
                 selected_candidates = random.sample(
-                    city_candidates, 
-                    min(len(city_candidates), candidate_per_city)
+                    city_candidates, min(len(city_candidates), candidate_per_city)
                 )
                 candidate_positions.extend(selected_candidates)
-        
+
         if not candidate_positions:
             return None  # 候補位置がない場合は何もしない
-        
+
         # ランダムに候補位置を選択
-        chosen_tile_x, chosen_tile_y, source_city_id = random.choice(candidate_positions)
-        chosen_x, chosen_y = coord_transformer.tile_to_pixel(chosen_tile_x, chosen_tile_y)
-        
+        chosen_tile_x, chosen_tile_y, source_city_id = random.choice(
+            candidate_positions
+        )
+        chosen_x, chosen_y = coord_transformer.tile_to_pixel(
+            chosen_tile_x, chosen_tile_y
+        )
+
         # 新しい都市IDを生成
         new_city_id = max(self.cities.keys()) + 1
-        
+
         # 都市名を生成
-        city_names = ["Harbor", "Mountain", "Forest", "Desert", "Valley", "River", "Hill", "Lake", "Plains", "Canyon"]
+        city_names = [
+            "Harbor",
+            "Mountain",
+            "Forest",
+            "Desert",
+            "Valley",
+            "River",
+            "Hill",
+            "Lake",
+            "Plains",
+            "Canyon",
+        ]
         used_names = {city.name for city in self.cities.values()}
         available_names = [name for name in city_names if name not in used_names]
-        
+
         if available_names:
             new_city_name = random.choice(available_names)
         else:
             new_city_name = f"City{new_city_id}"
-        
+
         # 新都市を作成
         new_city = City(new_city_id, new_city_name, chosen_x, chosen_y)
         self.cities[new_city_id] = new_city
-        
+
         # 元の都市と道路で接続
         new_road = Road(source_city_id, new_city_id)
         self.roads.append(new_road)
-        
-        print(f"New city discovered: {new_city_name} (ID: {new_city_id}) at tile ({chosen_tile_x}, {chosen_tile_y})")
+
+        # 新都市に敵キャラクターを配置
+        new_enemy = self._create_enemy_for_new_city(chosen_x, chosen_y, new_city_id)
+        if new_enemy:
+            self.enemies.append(new_enemy)
+            print(f"New enemy ({new_enemy.ai_type}) spawned in {new_city_name}")
+
+        print(
+            f"New city discovered: {new_city_name} (ID: {new_city_id}) at tile ({chosen_tile_x}, {chosen_tile_y})"
+        )
         print(f"Connected to {self.cities[source_city_id].name} (ID: {source_city_id})")
-        
+
         # 自動セーブ
         self.auto_save()
-        
+
         # 発見した都市の情報を返す
         return {
             "new_city": new_city,
             "source_city": self.cities[source_city_id],
-            "tile_position": (chosen_tile_x, chosen_tile_y)
+            "tile_position": (chosen_tile_x, chosen_tile_y),
+            "new_enemy": new_enemy,
         }
+
+    def _create_enemy_for_new_city(
+        self, x: float, y: float, city_id: int
+    ) -> Optional[Enemy]:
+        """新都市用の敵キャラクターを生成"""
+        # AIタイプをランダムに選択（バランスを考慮した重み付き）
+        ai_types_with_weights = [
+            ("random", 0.4),  # 40% - 最も一般的
+            ("aggressive", 0.25),  # 25% - 積極的
+            ("patrol", 0.20),  # 20% - パトロール
+            ("defensive", 0.15),  # 15% - 防御的
+        ]
+
+        # 重み付きランダム選択
+        weights = [weight for _, weight in ai_types_with_weights]
+        ai_types = [ai_type for ai_type, _ in ai_types_with_weights]
+        selected_ai_type = random.choices(ai_types, weights=weights)[0]
+
+        # 敵のバリエーションのために異なる画像インデックスを使用
+        # 既存の敵の数に基づいて画像を決定（1〜3段目をローテーション）
+        image_index = (len(self.enemies) % 3) + 1  # 1, 2, 3をローテーション
+
+        # 敵キャラクターを生成
+        new_enemy = Enemy(
+            x,
+            y,
+            current_city_id=city_id,
+            ai_type=selected_ai_type,
+            image_index=image_index,
+        )
+
+        # パトロールタイプの場合、近隣都市をパトロール経路に設定
+        if selected_ai_type == "patrol":
+            connected_cities = self.get_connected_city_ids(city_id)
+            if connected_cities:
+                # 新都市と接続都市を含むパトロール経路を設定
+                new_enemy.patrol_city_ids = [city_id] + connected_cities[
+                    :2
+                ]  # 最大3都市
+                new_enemy.patrol_index = 0
+
+        return new_enemy
 
     def to_dict(self) -> Dict[str, Any]:
         """ゲーム状態を辞書に変換"""

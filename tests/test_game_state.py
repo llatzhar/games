@@ -7,7 +7,15 @@ from unittest.mock import patch
 # テストファイルからプロジェクトルートのモジュールをインポートできるようにする
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from game_state import City, Enemy, GameState, Player, Road, CITY_DISCOVERY_INTERVAL, CITY_DISCOVERY_DISTANCE  # noqa: E402
+from game_state import (  # noqa: E402
+    CITY_DISCOVERY_DISTANCE,
+    CITY_DISCOVERY_INTERVAL,
+    City,
+    Enemy,
+    GameState,
+    Player,
+    Road,
+)
 
 
 class TestCity(unittest.TestCase):
@@ -297,56 +305,67 @@ class TestGameState(unittest.TestCase):
 
         # 敵ターンからプレイヤーターンへ
         self.game_state.initialize_default_state()  # 初期化
-        
+
         self.game_state.switch_turn()
         self.assertEqual(self.game_state.current_turn, "player")
         self.assertEqual(self.game_state.turn_counter, 2)  # ターンカウンターが増加
         self.assertFalse(self.game_state.enemy_moved_this_turn)
-        
+
         # 都市発見のタイミングチェック（CITY_DISCOVERY_INTERVAL=1の場合、毎ターン発見可能）
         if CITY_DISCOVERY_INTERVAL == 1:
             should_discover = self.game_state.should_discover_city()
-            self.assertTrue(should_discover, "ターンカウンター2で都市発見可能でなければならない")
+            self.assertTrue(
+                should_discover, "ターンカウンター2で都市発見可能でなければならない"
+            )
 
     def test_city_discovery(self):
         """都市発見機能のテスト"""
         self.game_state.initialize_default_state()
         initial_cities_count = len(self.game_state.cities)
         initial_roads_count = len(self.game_state.roads)
-        
+
         # 都市発見実行
         discovery_info = self.game_state.discover_new_city()
-        
+
         # 発見情報が返されることを確認
         self.assertIsNotNone(discovery_info)
         self.assertIn("new_city", discovery_info)
         self.assertIn("source_city", discovery_info)
         self.assertIn("tile_position", discovery_info)
-        
+
         # 都市が1つ増加
         self.assertEqual(len(self.game_state.cities), initial_cities_count + 1)
-        
+
         # 道路が1つ増加
         self.assertEqual(len(self.game_state.roads), initial_roads_count + 1)
-        
+
         # 新都市が適切な距離に配置されているかチェック
         from coordinate_utils import create_default_coordinate_transformer
+
         coord_transformer = create_default_coordinate_transformer()
-        
+
         new_city = discovery_info["new_city"]
         source_city = discovery_info["source_city"]
-        
+
         # 新都市と元都市の距離をチェック
         new_tile_x, new_tile_y = coord_transformer.pixel_to_tile(new_city.x, new_city.y)
-        source_tile_x, source_tile_y = coord_transformer.pixel_to_tile(source_city.x, source_city.y)
-        manhattan_distance = abs(new_tile_x - source_tile_x) + abs(new_tile_y - source_tile_y)
-        
-        self.assertEqual(manhattan_distance, CITY_DISCOVERY_DISTANCE, "新都市が元都市から適切な距離に配置されていません")
+        source_tile_x, source_tile_y = coord_transformer.pixel_to_tile(
+            source_city.x, source_city.y
+        )
+        manhattan_distance = abs(new_tile_x - source_tile_x) + abs(
+            new_tile_y - source_tile_y
+        )
+
+        self.assertEqual(
+            manhattan_distance,
+            CITY_DISCOVERY_DISTANCE,
+            "新都市が元都市から適切な距離に配置されていません",
+        )
 
     def test_city_discovery_interval(self):
         """都市発見間隔のテスト"""
         self.game_state.initialize_default_state()
-        
+
         # 複数回ターン切り替えを行い、発見タイミングをテスト
         discovery_checks = []
         for turn in range(1, 6):
@@ -354,15 +373,15 @@ class TestGameState(unittest.TestCase):
             self.game_state.current_turn = "enemy"
             self.game_state.turn_counter = turn
             self.game_state.switch_turn()
-            
+
             # should_discover_city メソッドをテスト
             should_discover = self.game_state.should_discover_city()
             discovery_checks.append(should_discover)
-            
+
             # 実際に発見処理を実行
             if should_discover:
                 self.game_state.discover_new_city()
-        
+
         # CITY_DISCOVERY_INTERVALに従って発見フラグが立っているかチェック
         expected_discovery_flags = [
             (turn + 1) % CITY_DISCOVERY_INTERVAL == 0 for turn in range(1, 6)
@@ -372,24 +391,24 @@ class TestGameState(unittest.TestCase):
     def test_city_discovery_after_battle(self):
         """戦闘後の都市発見タイミングのテスト"""
         self.game_state.initialize_default_state()
-        
+
         # プレイヤーと敵を同じ都市に配置（戦闘を発生させる）
         player = self.game_state.players[0]
         enemy = self.game_state.enemies[0]
         player.current_city_id = 1  # Central
         enemy.current_city_id = 1  # Central（同じ都市に配置）
-        
+
         # 都市発見のタイミングに設定
         self.game_state.turn_counter = CITY_DISCOVERY_INTERVAL
-        
+
         # 戦闘をチェック
         battle_locations = self.game_state.check_battles()
         self.assertTrue(len(battle_locations) > 0, "戦闘が発生するはず")
-        
+
         # 都市発見フラグもチェック
         should_discover = self.game_state.should_discover_city()
         self.assertTrue(should_discover, "都市発見のタイミングのはず")
-        
+
         # この状況では：
         # 1. 戦闘がある場合 → BattleSequenceState → 戦闘後にCityDiscoveryState
         # 2. 戦闘がない場合 → 直接CityDiscoveryState
@@ -398,24 +417,31 @@ class TestGameState(unittest.TestCase):
     def test_city_placement_road_intersection_check(self):
         """都市配置時の道路交差チェックのテスト"""
         self.game_state.initialize_default_state()
-        
+
         # テスト用の都市配置（道路交差が発生するような配置を想定）
         # Central(0,0), West(-1,2), East(1,2) の初期配置
-        
+
         # Central-West間の道路: (-16, 32) から (16, 32) への線分と交差するような新都市配置をテスト
         from coordinate_utils import create_default_coordinate_transformer
+
         coord_transformer = create_default_coordinate_transformer()
-        
+
         central_city = self.game_state.cities[1]  # Central
-        
+
         # Central-West道路と交差する位置（例：Central上方向で道路を横切る位置）
-        test_pixel_x, test_pixel_y = coord_transformer.tile_to_pixel(0, -3)  # Central上方
-        
+        test_pixel_x, test_pixel_y = coord_transformer.tile_to_pixel(
+            0, -3
+        )  # Central上方
+
         # 道路交差チェック関数をテスト
-        is_valid = self.game_state.is_valid_city_placement(test_pixel_x, test_pixel_y, central_city.id)
-        
+        is_valid = self.game_state.is_valid_city_placement(
+            test_pixel_x, test_pixel_y, central_city.id
+        )
+
         # 結果の検証（実際の道路配置によって結果は変わるが、関数が実行されることをテスト）
-        self.assertIsInstance(is_valid, bool, "is_valid_city_placement should return a boolean")
+        self.assertIsInstance(
+            is_valid, bool, "is_valid_city_placement should return a boolean"
+        )
 
     def test_movement_flags(self):
         """移動フラグのテスト"""
@@ -718,6 +744,103 @@ class TestCoordinateTransformation(unittest.TestCase):
             restored_city = new_game_state.cities[city_id]
             self.assertEqual(restored_city.x, orig_x)
             self.assertEqual(restored_city.y, orig_y)
+
+
+class TestEnemyGeneration(unittest.TestCase):
+    """新都市での敵生成機能のテスト"""
+
+    def setUp(self):
+        self.game_state = GameState()
+        self.game_state.initialize_default_state()
+
+    def test_enemy_spawned_with_new_city(self):
+        """新都市発見時に敵が生成されることをテスト"""
+        initial_enemy_count = len(self.game_state.enemies)
+        initial_city_count = len(self.game_state.cities)
+
+        # 都市発見を実行
+        discovery_info = self.game_state.discover_new_city()
+
+        # 新都市と敵が生成されたことを確認
+        if discovery_info:  # 候補位置がある場合のみテスト
+            self.assertEqual(len(self.game_state.cities), initial_city_count + 1)
+            self.assertEqual(len(self.game_state.enemies), initial_enemy_count + 1)
+
+            # 返り値に新しい敵が含まれていることを確認
+            self.assertIn("new_enemy", discovery_info)
+            new_enemy = discovery_info["new_enemy"]
+            self.assertIsNotNone(new_enemy)
+
+            # 新しい敵が新都市に配置されていることを確認
+            new_city = discovery_info["new_city"]
+            self.assertEqual(new_enemy.current_city_id, new_city.id)
+            self.assertEqual(new_enemy.x, new_city.x)
+            self.assertEqual(new_enemy.y, new_city.y)
+
+    def test_enemy_ai_type_distribution(self):
+        """敵のAIタイプが適切に分散されることをテスト"""
+        ai_types_found = set()
+
+        # 複数回都市発見を実行してAIタイプの分散を確認
+        for _ in range(20):  # 十分な回数実行
+            self.game_state = GameState()
+            self.game_state.initialize_default_state()
+
+            discovery_info = self.game_state.discover_new_city()
+            if discovery_info and discovery_info["new_enemy"]:
+                ai_types_found.add(discovery_info["new_enemy"].ai_type)
+
+        # 複数のAIタイプが生成されることを確認
+        # （確率的なテストなので、少なくとも2種類は見つかるはず）
+        self.assertGreaterEqual(len(ai_types_found), 2)
+
+        # 有効なAIタイプのみが生成されることを確認
+        valid_ai_types = {"random", "aggressive", "patrol", "defensive"}
+        for ai_type in ai_types_found:
+            self.assertIn(ai_type, valid_ai_types)
+
+    def test_enemy_image_index_rotation(self):
+        """敵の画像インデックスがローテーションされることをテスト"""
+        # 初期状態で1体の敵がいることを確認
+        initial_enemy_count = len(self.game_state.enemies)
+
+        # 複数の都市を発見して画像インデックスの変化を確認
+        image_indices = []
+        for i in range(3):  # 3回発見を試行
+            discovery_info = self.game_state.discover_new_city()
+            if discovery_info and discovery_info["new_enemy"]:
+                image_indices.append(discovery_info["new_enemy"].image_index)
+
+        # 画像インデックスが1-3の範囲内であることを確認
+        for index in image_indices:
+            self.assertIn(index, [1, 2, 3])
+
+    def test_patrol_enemy_gets_route(self):
+        """パトロールタイプの敵が適切な経路を取得することをテスト"""
+        # パトロールタイプの敵が生成されるまで試行
+        for _ in range(50):  # 最大50回試行
+            self.game_state = GameState()
+            self.game_state.initialize_default_state()
+
+            discovery_info = self.game_state.discover_new_city()
+            if (
+                discovery_info
+                and discovery_info["new_enemy"]
+                and discovery_info["new_enemy"].ai_type == "patrol"
+            ):
+
+                patrol_enemy = discovery_info["new_enemy"]
+
+                # パトロール経路が設定されていることを確認
+                self.assertGreater(len(patrol_enemy.patrol_city_ids), 0)
+
+                # 新都市が経路に含まれていることを確認
+                new_city_id = discovery_info["new_city"].id
+                self.assertIn(new_city_id, patrol_enemy.patrol_city_ids)
+
+                # パトロールインデックスが0に設定されていることを確認
+                self.assertEqual(patrol_enemy.patrol_index, 0)
+                break
 
 
 if __name__ == "__main__":

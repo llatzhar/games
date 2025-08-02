@@ -311,7 +311,10 @@ class TransitionState(MapGameState):
             return self.context
 
         # 戦闘がない場合のみ都市発見をチェック
-        if self.next_turn == "player" and self.context.game_state.should_discover_city():
+        if (
+            self.next_turn == "player"
+            and self.context.game_state.should_discover_city()
+        ):
             # 都市発見表示状態へ
             self.transition_to(CityDiscoveryState(self.context))
             return self.context
@@ -473,7 +476,7 @@ class CityDiscoveryState(MapGameState):
         super().enter()
         # 都市発見を実行
         self.discovery_info = self.context.game_state.discover_new_city()
-        
+
         if self.discovery_info:
             # 新しい都市にカメラを移動
             new_city = self.discovery_info["new_city"]
@@ -485,11 +488,11 @@ class CityDiscoveryState(MapGameState):
     def update(self):
         if self.discovery_info:
             self.display_timer += 1
-            
+
             # 表示時間が終了したらプレイヤーターンのカットインへ
             if self.display_timer >= self.display_duration:
                 self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
-        
+
         return self.context
 
     def handle_input(self):
@@ -502,39 +505,48 @@ class CityDiscoveryState(MapGameState):
         """都市発見表示のオーバーレイを描画"""
         if not self.discovery_info:
             return
-            
+
         new_city = self.discovery_info["new_city"]
         source_city = self.discovery_info["source_city"]
-        
+        new_enemy = self.discovery_info.get("new_enemy")
+
         # 背景の半透明オーバーレイ
         pyxel.rect(0, 0, screen_width, screen_height, 0)
-        
-        # 中央に情報ボックスを表示
+
+        # 中央に情報ボックスを表示（敵情報を含む場合は高さを増加）
         box_width = 200
-        box_height = 80
+        box_height = 100 if new_enemy else 80
         box_x = (screen_width - box_width) // 2
         box_y = (screen_height - box_height) // 2
-        
+
         # ボックスの背景
         pyxel.rect(box_x, box_y, box_width, box_height, 1)
         pyxel.rectb(box_x, box_y, box_width, box_height, 7)
-        
+
         # テキストを表示
         title_text = "NEW CITY DISCOVERED!"
         city_text = f"Name: {new_city.name}"
         connection_text = f"Connected to: {source_city.name}"
         skip_text = "Press SPACE to continue"
-        
+
         # テキストを中央揃えで表示
         title_x = box_x + (box_width - len(title_text) * 4) // 2
         city_x = box_x + (box_width - len(city_text) * 4) // 2
         connection_x = box_x + (box_width - len(connection_text) * 4) // 2
         skip_x = box_x + (box_width - len(skip_text) * 4) // 2
-        
+
         pyxel.text(title_x, box_y + 10, title_text, 11)
         pyxel.text(city_x, box_y + 25, city_text, 7)
         pyxel.text(connection_x, box_y + 35, connection_text, 7)
-        pyxel.text(skip_x, box_y + 55, skip_text, 6)
+
+        # 敵情報を表示（存在する場合）
+        if new_enemy:
+            enemy_text = f"Enemy ({new_enemy.ai_type}) appeared!"
+            enemy_x = box_x + (box_width - len(enemy_text) * 4) // 2
+            pyxel.text(enemy_x, box_y + 45, enemy_text, 8)
+            pyxel.text(skip_x, box_y + 65, skip_text, 6)
+        else:
+            pyxel.text(skip_x, box_y + 55, skip_text, 6)
 
     def exit(self):
         pass
