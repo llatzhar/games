@@ -305,9 +305,15 @@ class TransitionState(MapGameState):
             self.transition_to(GameOverState(self.context, is_victory=True))
             return self.context
 
-        # 戦闘がある場合
+        # 戦闘がある場合は戦闘状態へ遷移（都市発見は戦闘後に処理）
         if self.battle_locations:
             self.transition_to(BattleSequenceState(self.context, self.battle_locations))
+            return self.context
+
+        # 戦闘がない場合のみ都市発見をチェック
+        if self.next_turn == "player" and self.context.game_state.should_discover_city():
+            # 都市発見表示状態へ
+            self.transition_to(CityDiscoveryState(self.context))
             return self.context
 
         # 戦闘がない場合はカットイン状態へ
@@ -401,16 +407,16 @@ class BattleSequenceState(MapGameState):
         self.context.game_state.remove_defeated_characters()
 
         # ターン切り替えは既にTransitionStateで実行済み
-        # 現在のターンに基づいてカットインを表示
+        # 現在のターンに基づいて次の状態を決定
         if self.context.game_state.current_turn == "player":
-            cutin_text = "PLAYER TURN"
-            next_turn = "player"
+            # プレイヤーターンで都市発見のタイミングの場合
+            if self.context.game_state.should_discover_city():
+                self.transition_to(CityDiscoveryState(self.context))
+            else:
+                self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
         else:
-            cutin_text = "ENEMY TURN"
-            next_turn = "enemy"
-
-        print("call transition to CutinState")
-        self.transition_to(CutinState(self.context, cutin_text, next_turn))
+            # 敵ターンの場合はそのままカットインへ
+            self.transition_to(CutinState(self.context, "ENEMY TURN", "enemy"))
 
     def handle_input(self):
         # 戦闘中は基本的に入力を受け付けない（Qキーでの終了のみ）
@@ -448,6 +454,87 @@ class CutinState(MapGameState):
     def handle_input(self):
         # カットイン中は入力を受け付けない
         pass
+
+    def exit(self):
+        pass
+
+
+class CityDiscoveryState(MapGameState):
+    """都市発見表示状態"""
+
+    def __init__(self, context):
+        super().__init__(context, MapStateType.CITY_DISCOVERY)
+        self.discovery_info = None
+        self.display_timer = 0
+        self.display_duration = 180  # 6秒間表示（30fps）
+
+    def enter(self):
+        print("enter CityDiscoveryState")
+        super().enter()
+        # 都市発見を実行
+        self.discovery_info = self.context.game_state.discover_new_city()
+        
+        if self.discovery_info:
+            # 新しい都市にカメラを移動
+            new_city = self.discovery_info["new_city"]
+            self.context.move_camera_to_city(new_city)
+        else:
+            # 都市発見に失敗した場合はすぐにプレイヤーターンへ
+            self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
+
+    def update(self):
+        if self.discovery_info:
+            self.display_timer += 1
+            
+            # 表示時間が終了したらプレイヤーターンのカットインへ
+            if self.display_timer >= self.display_duration:
+                self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
+        
+        return self.context
+
+    def handle_input(self):
+        # SPACEキーまたはマウスクリックでスキップ可能
+        if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+            if self.discovery_info:
+                self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
+
+    def draw_overlay(self):
+        """都市発見表示のオーバーレイを描画"""
+        if not self.discovery_info:
+            return
+            
+        new_city = self.discovery_info["new_city"]
+        source_city = self.discovery_info["source_city"]
+        
+        # 背景の半透明オーバーレイ
+        pyxel.rect(0, 0, screen_width, screen_height, 0)
+        
+        # 中央に情報ボックスを表示
+        box_width = 200
+        box_height = 80
+        box_x = (screen_width - box_width) // 2
+        box_y = (screen_height - box_height) // 2
+        
+        # ボックスの背景
+        pyxel.rect(box_x, box_y, box_width, box_height, 1)
+        pyxel.rectb(box_x, box_y, box_width, box_height, 7)
+        
+        # テキストを表示
+        title_text = "NEW CITY DISCOVERED!"
+        city_text = f"Name: {new_city.name}"
+        connection_text = f"Connected to: {source_city.name}"
+        skip_text = "Press SPACE to continue"
+        
+        # テキストを中央揃えで表示
+        title_x = box_x + (box_width - len(title_text) * 4) // 2
+        city_x = box_x + (box_width - len(city_text) * 4) // 2
+        connection_x = box_x + (box_width - len(connection_text) * 4) // 2
+        skip_x = box_x + (box_width - len(skip_text) * 4) // 2
+        
+        pyxel.text(title_x, box_y + 10, title_text, 11)
+        pyxel.text(city_x, box_y + 25, city_text, 7)
+        pyxel.text(connection_x, box_y + 35, connection_text, 7)
+        pyxel.text(skip_x, box_y + 55, skip_text, 6)
 
     def exit(self):
         pass

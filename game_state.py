@@ -1,8 +1,13 @@
 import json
 import os
+import random
 from typing import Any, Dict, List, Optional
 
 from coordinate_utils import create_default_coordinate_transformer
+
+# 都市発見の設定
+CITY_DISCOVERY_INTERVAL = 1  # nターンごとに新都市発見（n=1で毎ターン）
+CITY_DISCOVERY_DISTANCE = 3  # 既存都市からのタイル距離
 
 
 class City:
@@ -349,6 +354,8 @@ class GameState:
             self.enemy_moved_this_turn = False
             self.turn_counter += 1
             self.ai_timer = 0
+            
+            # 都市発見は別の状態で処理するためここでは実行しない
 
     def can_move_this_turn(self) -> bool:
         """このターンで移動可能かチェック"""
@@ -356,6 +363,83 @@ class GameState:
             return not self.player_moved_this_turn
         else:
             return not self.enemy_moved_this_turn
+
+    def should_discover_city(self) -> bool:
+        """都市発見のタイミングかどうかをチェック"""
+        return self.turn_counter % CITY_DISCOVERY_INTERVAL == 0
+
+    def discover_new_city(self):
+        """新しい都市を発見して追加"""
+        if not self.cities:
+            return None  # 既存都市がない場合は何もしない
+        
+        coord_transformer = create_default_coordinate_transformer()
+        
+        # 候補位置を生成（既存都市から距離3の位置）
+        candidate_positions = []
+        occupied_positions = set()
+        
+        # 既存都市の位置を記録
+        for city in self.cities.values():
+            tile_x, tile_y = coord_transformer.pixel_to_tile(city.x, city.y)
+            occupied_positions.add((tile_x, tile_y))
+        
+        # 各既存都市から距離3の位置を候補に追加
+        for city in self.cities.values():
+            base_tile_x, base_tile_y = coord_transformer.pixel_to_tile(city.x, city.y)
+            
+            # 距離3の円周上の位置を生成
+            for dx in range(-CITY_DISCOVERY_DISTANCE, CITY_DISCOVERY_DISTANCE + 1):
+                for dy in range(-CITY_DISCOVERY_DISTANCE, CITY_DISCOVERY_DISTANCE + 1):
+                    # マンハッタン距離が3の位置のみ
+                    if abs(dx) + abs(dy) == CITY_DISCOVERY_DISTANCE:
+                        candidate_x = base_tile_x + dx
+                        candidate_y = base_tile_y + dy
+                        
+                        # 既存都市と重複しない位置のみ追加
+                        if (candidate_x, candidate_y) not in occupied_positions:
+                            candidate_positions.append((candidate_x, candidate_y, city.id))
+        
+        if not candidate_positions:
+            return None  # 候補位置がない場合は何もしない
+        
+        # ランダムに候補位置を選択
+        chosen_tile_x, chosen_tile_y, source_city_id = random.choice(candidate_positions)
+        chosen_x, chosen_y = coord_transformer.tile_to_pixel(chosen_tile_x, chosen_tile_y)
+        
+        # 新しい都市IDを生成
+        new_city_id = max(self.cities.keys()) + 1
+        
+        # 都市名を生成
+        city_names = ["Harbor", "Mountain", "Forest", "Desert", "Valley", "River", "Hill", "Lake", "Plains", "Canyon"]
+        used_names = {city.name for city in self.cities.values()}
+        available_names = [name for name in city_names if name not in used_names]
+        
+        if available_names:
+            new_city_name = random.choice(available_names)
+        else:
+            new_city_name = f"City{new_city_id}"
+        
+        # 新都市を作成
+        new_city = City(new_city_id, new_city_name, chosen_x, chosen_y)
+        self.cities[new_city_id] = new_city
+        
+        # 元の都市と道路で接続
+        new_road = Road(source_city_id, new_city_id)
+        self.roads.append(new_road)
+        
+        print(f"New city discovered: {new_city_name} (ID: {new_city_id}) at tile ({chosen_tile_x}, {chosen_tile_y})")
+        print(f"Connected to {self.cities[source_city_id].name} (ID: {source_city_id})")
+        
+        # 自動セーブ
+        self.auto_save()
+        
+        # 発見した都市の情報を返す
+        return {
+            "new_city": new_city,
+            "source_city": self.cities[source_city_id],
+            "tile_position": (chosen_tile_x, chosen_tile_y)
+        }
 
     def to_dict(self) -> Dict[str, Any]:
         """ゲーム状態を辞書に変換"""

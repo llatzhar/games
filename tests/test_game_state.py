@@ -2,11 +2,12 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 # テストファイルからプロジェクトルートのモジュールをインポートできるようにする
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from game_state import City, Enemy, GameState, Player, Road  # noqa: E402
+from game_state import City, Enemy, GameState, Player, Road, CITY_DISCOVERY_INTERVAL, CITY_DISCOVERY_DISTANCE  # noqa: E402
 
 
 class TestCity(unittest.TestCase):
@@ -295,10 +296,104 @@ class TestGameState(unittest.TestCase):
         self.assertFalse(self.game_state.player_moved_this_turn)
 
         # 敵ターンからプレイヤーターンへ
+        self.game_state.initialize_default_state()  # 初期化
+        
         self.game_state.switch_turn()
         self.assertEqual(self.game_state.current_turn, "player")
         self.assertEqual(self.game_state.turn_counter, 2)  # ターンカウンターが増加
         self.assertFalse(self.game_state.enemy_moved_this_turn)
+        
+        # 都市発見のタイミングチェック（CITY_DISCOVERY_INTERVAL=1の場合、毎ターン発見可能）
+        if CITY_DISCOVERY_INTERVAL == 1:
+            should_discover = self.game_state.should_discover_city()
+            self.assertTrue(should_discover, "ターンカウンター2で都市発見可能でなければならない")
+
+    def test_city_discovery(self):
+        """都市発見機能のテスト"""
+        self.game_state.initialize_default_state()
+        initial_cities_count = len(self.game_state.cities)
+        initial_roads_count = len(self.game_state.roads)
+        
+        # 都市発見実行
+        discovery_info = self.game_state.discover_new_city()
+        
+        # 発見情報が返されることを確認
+        self.assertIsNotNone(discovery_info)
+        self.assertIn("new_city", discovery_info)
+        self.assertIn("source_city", discovery_info)
+        self.assertIn("tile_position", discovery_info)
+        
+        # 都市が1つ増加
+        self.assertEqual(len(self.game_state.cities), initial_cities_count + 1)
+        
+        # 道路が1つ増加
+        self.assertEqual(len(self.game_state.roads), initial_roads_count + 1)
+        
+        # 新都市が適切な距離に配置されているかチェック
+        from coordinate_utils import create_default_coordinate_transformer
+        coord_transformer = create_default_coordinate_transformer()
+        
+        new_city = discovery_info["new_city"]
+        source_city = discovery_info["source_city"]
+        
+        # 新都市と元都市の距離をチェック
+        new_tile_x, new_tile_y = coord_transformer.pixel_to_tile(new_city.x, new_city.y)
+        source_tile_x, source_tile_y = coord_transformer.pixel_to_tile(source_city.x, source_city.y)
+        manhattan_distance = abs(new_tile_x - source_tile_x) + abs(new_tile_y - source_tile_y)
+        
+        self.assertEqual(manhattan_distance, CITY_DISCOVERY_DISTANCE, "新都市が元都市から適切な距離に配置されていません")
+
+    def test_city_discovery_interval(self):
+        """都市発見間隔のテスト"""
+        self.game_state.initialize_default_state()
+        
+        # 複数回ターン切り替えを行い、発見タイミングをテスト
+        discovery_checks = []
+        for turn in range(1, 6):
+            # 敵ターンからプレイヤーターンへの切り替えをシミュレート
+            self.game_state.current_turn = "enemy"
+            self.game_state.turn_counter = turn
+            self.game_state.switch_turn()
+            
+            # should_discover_city メソッドをテスト
+            should_discover = self.game_state.should_discover_city()
+            discovery_checks.append(should_discover)
+            
+            # 実際に発見処理を実行
+            if should_discover:
+                self.game_state.discover_new_city()
+        
+        # CITY_DISCOVERY_INTERVALに従って発見フラグが立っているかチェック
+        expected_discovery_flags = [
+            (turn + 1) % CITY_DISCOVERY_INTERVAL == 0 for turn in range(1, 6)
+        ]
+        self.assertEqual(discovery_checks, expected_discovery_flags)
+
+    def test_city_discovery_after_battle(self):
+        """戦闘後の都市発見タイミングのテスト"""
+        self.game_state.initialize_default_state()
+        
+        # プレイヤーと敵を同じ都市に配置（戦闘を発生させる）
+        player = self.game_state.players[0]
+        enemy = self.game_state.enemies[0]
+        player.current_city_id = 1  # Central
+        enemy.current_city_id = 1  # Central（同じ都市に配置）
+        
+        # 都市発見のタイミングに設定
+        self.game_state.turn_counter = CITY_DISCOVERY_INTERVAL
+        
+        # 戦闘をチェック
+        battle_locations = self.game_state.check_battles()
+        self.assertTrue(len(battle_locations) > 0, "戦闘が発生するはず")
+        
+        # 都市発見フラグもチェック
+        should_discover = self.game_state.should_discover_city()
+        self.assertTrue(should_discover, "都市発見のタイミングのはず")
+        
+        # この状況では：
+        # 1. 戦闘がある場合 → BattleSequenceState → 戦闘後にCityDiscoveryState
+        # 2. 戦闘がない場合 → 直接CityDiscoveryState
+        # どちらの場合も最終的に都市発見が実行される
 
     def test_movement_flags(self):
         """移動フラグのテスト"""

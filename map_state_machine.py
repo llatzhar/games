@@ -12,6 +12,7 @@ class MapStateType(Enum):
     ENEMY_SELECTION = "enemy_selection"  # 敵選択演出状態を追加
     TRANSITION = "transition"
     BATTLE_SEQUENCE = "battle_sequence"
+    CITY_DISCOVERY = "city_discovery"  # 都市発見表示状態を追加
     CUTIN = "cutin"
     GAME_OVER = "game_over"
     VICTORY = "victory"
