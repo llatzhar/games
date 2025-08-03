@@ -418,70 +418,130 @@ class GameState:
 
         return True
 
+    def is_valid_city_placement_for_midpoint(self, new_city_x, new_city_y, city1_id, city2_id):
+        """中点配置用の都市配置有効性チェック（元の道路は除外）"""
+        # 新しい都市から2つの既存都市への道路の座標
+        city1 = self.cities[city1_id]
+        city2 = self.cities[city2_id]
+        
+        new_road1_start = (new_city_x, new_city_y)
+        new_road1_end = (city1.x, city1.y)
+        new_road2_start = (new_city_x, new_city_y)
+        new_road2_end = (city2.x, city2.y)
+
+        # 既存の道路との交差をチェック（元の道路は除外）
+        for road in self.roads:
+            # 元の道路（city1_id - city2_id）は交差チェックから除外
+            if ((road.city1_id == city1_id and road.city2_id == city2_id) or 
+                (road.city1_id == city2_id and road.city2_id == city1_id)):
+                continue
+                
+            road_city1 = self.cities[road.city1_id]
+            road_city2 = self.cities[road.city2_id]
+            existing_road_start = (road_city1.x, road_city1.y)
+            existing_road_end = (road_city2.x, road_city2.y)
+
+            # 新しい道路1が既存の道路と交差するかチェック
+            if roads_intersect(
+                new_road1_start, new_road1_end, existing_road_start, existing_road_end
+            ):
+                return False
+            
+            # 新しい道路2が既存の道路と交差するかチェック
+            if roads_intersect(
+                new_road2_start, new_road2_end, existing_road_start, existing_road_end
+            ):
+                return False
+
+        # 新しい都市が既存の道路に近すぎないかチェック（元の道路は除外）
+        min_distance_to_road = 20  # 最小距離（ピクセル）
+        for road in self.roads:
+            # 元の道路（city1_id - city2_id）は距離チェックから除外
+            if ((road.city1_id == city1_id and road.city2_id == city2_id) or 
+                (road.city1_id == city2_id and road.city2_id == city1_id)):
+                continue
+                
+            road_city1 = self.cities[road.city1_id]
+            road_city2 = self.cities[road.city2_id]
+            existing_road_start = (road_city1.x, road_city1.y)
+            existing_road_end = (road_city2.x, road_city2.y)
+
+            # 新しい都市が既存の道路に近すぎる場合は無効
+            if point_too_close_to_line(
+                new_city_x, new_city_y,
+                existing_road_start, existing_road_end,
+                min_distance_to_road,
+            ):
+                return False
+
+        # 新しい都市が既存の都市に近すぎないかチェック（接続先を除く）
+        min_distance_to_city = 25  # 最小距離（ピクセル、少し短めに設定）
+        for city in self.cities.values():
+            if city.id not in [city1_id, city2_id]:  # 接続先の都市は除外
+                distance_sq = (new_city_x - city.x) ** 2 + (new_city_y - city.y) ** 2
+                if distance_sq < min_distance_to_city**2:
+                    return False
+
+        return True
+
     def discover_new_city(self):
-        """新しい都市を発見して追加"""
-        if not self.cities:
-            return None  # 既存都市がない場合は何もしない
+        """新しい都市を発見して追加（道路の中点付近に配置）"""
+        if not self.roads:
+            return None  # 既存道路がない場合は何もしない
 
         coord_transformer = create_default_coordinate_transformer()
 
-        # 候補位置を生成（既存都市から距離3の位置）
+        # 候補となる道路とその中点位置を生成
         candidate_positions = []
-        occupied_positions = set()
 
-        # 既存都市の位置を記録
-        for city in self.cities.values():
-            tile_x, tile_y = coord_transformer.pixel_to_tile(city.x, city.y)
-            occupied_positions.add((tile_x, tile_y))
-
-        # 都市をランダムな順序でシャッフル（完全ランダム選択のため）
-        cities_list = list(self.cities.values())
-        random.shuffle(cities_list)
-
-        # 各既存都市から距離3の位置を候補に追加（シャッフル済み順序で）
-        # 各都市から最大candidate_per_city個の候補を収集してバランスを取る
-        candidate_per_city = 8  # 各都市から最大8個の候補位置
-        for city in cities_list:
-            city_candidates = []
-            base_tile_x, base_tile_y = coord_transformer.pixel_to_tile(city.x, city.y)
-
-            # 距離3の円周上の位置を生成
-            for dx in range(-CITY_DISCOVERY_DISTANCE, CITY_DISCOVERY_DISTANCE + 1):
-                for dy in range(-CITY_DISCOVERY_DISTANCE, CITY_DISCOVERY_DISTANCE + 1):
-                    # マンハッタン距離が3の位置のみ
-                    if abs(dx) + abs(dy) == CITY_DISCOVERY_DISTANCE:
-                        candidate_x = base_tile_x + dx
-                        candidate_y = base_tile_y + dy
-
-                        # 既存都市と重複しない位置のみ追加
-                        if (candidate_x, candidate_y) not in occupied_positions:
-                            # ピクセル座標に変換
-                            pixel_x, pixel_y = coord_transformer.tile_to_pixel(
-                                candidate_x, candidate_y
-                            )
-
-                            # 道路交差や距離チェックを実行
-                            if self.is_valid_city_placement(pixel_x, pixel_y, city.id):
-                                city_candidates.append(
-                                    (candidate_x, candidate_y, city.id)
-                                )
-
-            # この都市から最大candidate_per_city個の候補をランダム選択
-            if city_candidates:
-                selected_candidates = random.sample(
-                    city_candidates, min(len(city_candidates), candidate_per_city)
-                )
-                candidate_positions.extend(selected_candidates)
+        for road in self.roads:
+            city1 = self.cities[road.city1_id]
+            city2 = self.cities[road.city2_id]
+            
+            # 2つの都市の中点を計算
+            mid_x = (city1.x + city2.x) / 2
+            mid_y = (city1.y + city2.y) / 2
+            
+            # 中点をタイル座標に変換
+            mid_tile_x, mid_tile_y = coord_transformer.pixel_to_tile(mid_x, mid_y)
+            
+            # 中点付近の候補位置を生成（±1タイルの範囲）
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    candidate_tile_x = mid_tile_x + dx
+                    candidate_tile_y = mid_tile_y + dy
+                    
+                    # 既存都市の位置でないことを確認
+                    occupied = False
+                    for city in self.cities.values():
+                        existing_tile_x, existing_tile_y = coord_transformer.pixel_to_tile(city.x, city.y)
+                        if existing_tile_x == candidate_tile_x and existing_tile_y == candidate_tile_y:
+                            occupied = True
+                            break
+                    
+                    if not occupied:
+                        # ピクセル座標に変換
+                        candidate_x, candidate_y = coord_transformer.tile_to_pixel(
+                            candidate_tile_x, candidate_tile_y
+                        )
+                        
+                        # 道路交差や距離チェックを実行
+                        # 元の道路の両端都市とは接続しないので、一時的にダミーIDで検証
+                        if self.is_valid_city_placement_for_midpoint(
+                            candidate_x, candidate_y, road.city1_id, road.city2_id
+                        ):
+                            candidate_positions.append((
+                                candidate_tile_x, candidate_tile_y, 
+                                candidate_x, candidate_y,
+                                road.city1_id, road.city2_id
+                            ))
 
         if not candidate_positions:
             return None  # 候補位置がない場合は何もしない
 
         # ランダムに候補位置を選択
-        chosen_tile_x, chosen_tile_y, source_city_id = random.choice(
+        chosen_tile_x, chosen_tile_y, chosen_x, chosen_y, city1_id, city2_id = random.choice(
             candidate_positions
-        )
-        chosen_x, chosen_y = coord_transformer.tile_to_pixel(
-            chosen_tile_x, chosen_tile_y
         )
 
         # 新しい都市IDを生成
@@ -489,16 +549,9 @@ class GameState:
 
         # 都市名を生成
         city_names = [
-            "Harbor",
-            "Mountain",
-            "Forest",
-            "Desert",
-            "Valley",
-            "River",
-            "Hill",
-            "Lake",
-            "Plains",
-            "Canyon",
+            "Harbor", "Mountain", "Forest", "Desert", "Valley", "River",
+            "Hill", "Lake", "Plains", "Canyon", "Bridge", "Crossing",
+            "Junction", "Midway", "Gateway"
         ]
         used_names = {city.name for city in self.cities.values()}
         available_names = [name for name in city_names if name not in used_names]
@@ -512,9 +565,11 @@ class GameState:
         new_city = City(new_city_id, new_city_name, chosen_x, chosen_y)
         self.cities[new_city_id] = new_city
 
-        # 元の都市と道路で接続
-        new_road = Road(source_city_id, new_city_id)
-        self.roads.append(new_road)
+        # 選択された2つの既存都市と新都市を道路で接続
+        new_road1 = Road(city1_id, new_city_id)
+        new_road2 = Road(city2_id, new_city_id)
+        self.roads.append(new_road1)
+        self.roads.append(new_road2)
 
         # 新都市に敵キャラクターを配置
         new_enemy = self._create_enemy_for_new_city(chosen_x, chosen_y, new_city_id)
@@ -525,7 +580,7 @@ class GameState:
         print(
             f"New city discovered: {new_city_name} (ID: {new_city_id}) at tile ({chosen_tile_x}, {chosen_tile_y})"
         )
-        print(f"Connected to {self.cities[source_city_id].name} (ID: {source_city_id})")
+        print(f"Connected to {self.cities[city1_id].name} (ID: {city1_id}) and {self.cities[city2_id].name} (ID: {city2_id})")
 
         # 自動セーブ
         self.auto_save()
@@ -533,7 +588,7 @@ class GameState:
         # 発見した都市の情報を返す
         return {
             "new_city": new_city,
-            "source_city": self.cities[source_city_id],
+            "connected_cities": [self.cities[city1_id], self.cities[city2_id]],
             "tile_position": (chosen_tile_x, chosen_tile_y),
             "new_enemy": new_enemy,
         }

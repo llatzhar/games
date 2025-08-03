@@ -507,15 +507,18 @@ class CityDiscoveryState(MapGameState):
             return
 
         new_city = self.discovery_info["new_city"]
-        source_city = self.discovery_info["source_city"]
+        connected_cities = self.discovery_info.get("connected_cities", [])
+        # 後方互換性のため、source_cityも確認
+        if not connected_cities and "source_city" in self.discovery_info:
+            connected_cities = [self.discovery_info["source_city"]]
         new_enemy = self.discovery_info.get("new_enemy")
 
         # 背景の半透明オーバーレイ
         pyxel.rect(0, 0, screen_width, screen_height, 0)
 
         # 中央に情報ボックスを表示（敵情報を含む場合は高さを増加）
-        box_width = 200
-        box_height = 100 if new_enemy else 80
+        box_width = 220
+        box_height = 120 if new_enemy else 100
         box_x = (screen_width - box_width) // 2
         box_y = (screen_height - box_height) // 2
 
@@ -526,27 +529,44 @@ class CityDiscoveryState(MapGameState):
         # テキストを表示
         title_text = "NEW CITY DISCOVERED!"
         city_text = f"Name: {new_city.name}"
-        connection_text = f"Connected to: {source_city.name}"
+        
+        # 接続情報を作成
+        if len(connected_cities) >= 2:
+            connection_text1 = f"Connected to: {connected_cities[0].name}"
+            connection_text2 = f"and {connected_cities[1].name}"
+        elif len(connected_cities) == 1:
+            connection_text1 = f"Connected to: {connected_cities[0].name}"
+            connection_text2 = ""
+        else:
+            connection_text1 = "Connected to unknown cities"
+            connection_text2 = ""
+        
         skip_text = "Press SPACE to continue"
 
         # テキストを中央揃えで表示
         title_x = box_x + (box_width - len(title_text) * 4) // 2
         city_x = box_x + (box_width - len(city_text) * 4) // 2
-        connection_x = box_x + (box_width - len(connection_text) * 4) // 2
+        connection1_x = box_x + (box_width - len(connection_text1) * 4) // 2
+        connection2_x = box_x + (box_width - len(connection_text2) * 4) // 2 if connection_text2 else 0
         skip_x = box_x + (box_width - len(skip_text) * 4) // 2
 
         pyxel.text(title_x, box_y + 10, title_text, 11)
         pyxel.text(city_x, box_y + 25, city_text, 7)
-        pyxel.text(connection_x, box_y + 35, connection_text, 7)
-
+        pyxel.text(connection1_x, box_y + 35, connection_text1, 7)
+        if connection_text2:
+            pyxel.text(connection2_x, box_y + 45, connection_text2, 7)
+        
         # 敵情報を表示（存在する場合）
         if new_enemy:
             enemy_text = f"Enemy ({new_enemy.ai_type}) appeared!"
             enemy_x = box_x + (box_width - len(enemy_text) * 4) // 2
-            pyxel.text(enemy_x, box_y + 45, enemy_text, 8)
-            pyxel.text(skip_x, box_y + 65, skip_text, 6)
+            text_y = box_y + 55 if connection_text2 else box_y + 45
+            pyxel.text(enemy_x, text_y, enemy_text, 8)
+            skip_y = text_y + 20
+            pyxel.text(skip_x, skip_y, skip_text, 6)
         else:
-            pyxel.text(skip_x, box_y + 55, skip_text, 6)
+            skip_y = box_y + 55 if connection_text2 else box_y + 45
+            pyxel.text(skip_x, skip_y, skip_text, 6)
 
     def exit(self):
         pass

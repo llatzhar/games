@@ -319,7 +319,7 @@ class TestGameState(unittest.TestCase):
             )
 
     def test_city_discovery(self):
-        """都市発見機能のテスト"""
+        """都市発見機能のテスト（中点配置ルール）"""
         self.game_state.initialize_default_state()
         initial_cities_count = len(self.game_state.cities)
         initial_roads_count = len(self.game_state.roads)
@@ -330,36 +330,38 @@ class TestGameState(unittest.TestCase):
         # 発見情報が返されることを確認
         self.assertIsNotNone(discovery_info)
         self.assertIn("new_city", discovery_info)
-        self.assertIn("source_city", discovery_info)
+        self.assertIn("connected_cities", discovery_info)
         self.assertIn("tile_position", discovery_info)
+        
+        # 2つの都市に接続されることを確認
+        self.assertEqual(len(discovery_info["connected_cities"]), 2)
 
         # 都市が1つ増加
         self.assertEqual(len(self.game_state.cities), initial_cities_count + 1)
 
-        # 道路が1つ増加
-        self.assertEqual(len(self.game_state.roads), initial_roads_count + 1)
+        # 道路が2つ増加（新都市と2つの既存都市を接続）
+        self.assertEqual(len(self.game_state.roads), initial_roads_count + 2)
 
-        # 新都市が適切な距離に配置されているかチェック
+        # 新都市が適切な接続を持っているかチェック
         from coordinate_utils import create_default_coordinate_transformer
 
         coord_transformer = create_default_coordinate_transformer()
 
         new_city = discovery_info["new_city"]
-        source_city = discovery_info["source_city"]
+        connected_cities = discovery_info["connected_cities"]
 
-        # 新都市と元都市の距離をチェック
-        new_tile_x, new_tile_y = coord_transformer.pixel_to_tile(new_city.x, new_city.y)
-        source_tile_x, source_tile_y = coord_transformer.pixel_to_tile(
-            source_city.x, source_city.y
-        )
-        manhattan_distance = abs(new_tile_x - source_tile_x) + abs(
-            new_tile_y - source_tile_y
-        )
+        # 2つの接続都市の中点を計算
+        mid_x = (connected_cities[0].x + connected_cities[1].x) / 2
+        mid_y = (connected_cities[0].y + connected_cities[1].y) / 2
 
-        self.assertEqual(
-            manhattan_distance,
-            CITY_DISCOVERY_DISTANCE,
-            "新都市が元都市から適切な距離に配置されていません",
+        # 新都市が中点から妥当な距離にあることをチェック
+        distance = ((new_city.x - mid_x)**2 + (new_city.y - mid_y)**2)**0.5
+        max_distance = 4.0 * 16  # 4タイル * 16ピクセル（少し余裕を持たせる）
+        
+        self.assertLessEqual(
+            distance,
+            max_distance,
+            "新都市が道路の中点から適切な距離に配置されていません",
         )
 
     def test_city_discovery_interval(self):
@@ -753,7 +755,66 @@ class TestEnemyGeneration(unittest.TestCase):
         self.game_state = GameState()
         self.game_state.initialize_default_state()
 
-    def test_enemy_spawned_with_new_city(self):
+    def test_city_discovery_midpoint_placement(self):
+        """道路の中点付近に新都市が配置されることをテスト"""
+        initial_city_count = len(self.game_state.cities)
+        initial_road_count = len(self.game_state.roads)
+        
+        # 都市発見を実行
+        discovery_info = self.game_state.discover_new_city()
+        
+        if discovery_info:  # 候補位置がある場合のみテスト
+            # 新都市が追加されたことを確認
+            self.assertEqual(len(self.game_state.cities), initial_city_count + 1)
+            
+            # 2本の新しい道路が追加されたことを確認
+            self.assertEqual(len(self.game_state.roads), initial_road_count + 2)
+            
+            # 返り値の構造を確認
+            self.assertIn("new_city", discovery_info)
+            self.assertIn("connected_cities", discovery_info)
+            self.assertEqual(len(discovery_info["connected_cities"]), 2)
+            
+            # 新都市が2つの既存都市に接続されていることを確認
+            new_city = discovery_info["new_city"]
+            connected_cities = discovery_info["connected_cities"]
+            
+            # 新都市から各接続都市への道路が存在することを確認
+            for connected_city in connected_cities:
+                self.assertTrue(
+                    self.game_state.are_cities_connected(new_city.id, connected_city.id)
+                )
+
+    def test_midpoint_city_positioning(self):
+        """新都市が既存道路の中点付近に配置されることをテスト"""
+        from coordinate_utils import create_default_coordinate_transformer
+        
+        coord_transformer = create_default_coordinate_transformer()
+        
+        # 複数回実行して中点配置を確認
+        for _ in range(5):
+            game_state = GameState()
+            game_state.initialize_default_state()
+            
+            # 元の道路の中点を計算
+            original_roads = game_state.roads.copy()
+            
+            discovery_info = game_state.discover_new_city()
+            if discovery_info:
+                new_city = discovery_info["new_city"]
+                connected_cities = discovery_info["connected_cities"]
+                
+                # 接続された2都市の中点を計算
+                mid_x = (connected_cities[0].x + connected_cities[1].x) / 2
+                mid_y = (connected_cities[0].y + connected_cities[1].y) / 2
+                
+                # 新都市が中点から適度に近い範囲にあることを確認（±3タイル程度）
+                distance = ((new_city.x - mid_x)**2 + (new_city.y - mid_y)**2)**0.5
+                max_distance = 3.0 * 16  # 3タイル * 16ピクセル
+                self.assertLessEqual(distance, max_distance)
+                break
+
+    def test_enemy_spawned_with_midpoint_city(self):
         """新都市発見時に敵が生成されることをテスト"""
         initial_enemy_count = len(self.game_state.enemies)
         initial_city_count = len(self.game_state.cities)
