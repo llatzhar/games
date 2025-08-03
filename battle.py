@@ -136,84 +136,119 @@ class BattleScene(Scene):
         self.damage_numbers.append((damage, attacker, 90))  # 3秒間表示
 
     def draw(self):
+        """メイン描画メソッド - 共通描画と状態固有描画を分離"""
+        # 共通背景描画
+        self.draw_background()
+        
+        # キャラクター描画
+        self.draw_battle_characters()
+        
+        # 状態固有の描画を委譲
+        self.draw_phase_content()
+        
+        # 共通UI要素
+        self.draw_damage_numbers()
+        self.draw_progress_bar()
+        self.draw_skip_instruction()
+
+    def draw_background(self):
+        """背景とエフェクト描画"""
         # 半透明の黒い背景
         pyxel.rect(0, 0, pyxel.width, pyxel.height, 0)
-
+        
         # フラッシュエフェクトを最初に描画（背景の上、他の要素の下）
         self.draw_flash_effects()
 
-        # キャラクター描画エリア
-        self.draw_battle_characters()
-
-        # メイン情報表示エリア（上部に移動）
+    def draw_phase_content(self):
+        """フェーズ固有のコンテンツ描画 - 状態に委譲"""
+        # 都市名表示（共通）
         info_x = pyxel.width // 2
-        info_y = 60  # 画面上部に移動
-
-        # 都市名表示
+        info_y = 60
         city_text = f"BATTLE AT {self.city.name}"
         text_width = len(city_text) * 4
         pyxel.text(info_x - text_width // 2, info_y - 30, city_text, 7)
+        
+        # 現在の状態に描画を委譲
+        current_state = self.state_context.current_state
+        if hasattr(current_state, 'draw_phase'):
+            current_state.draw_phase()
+        else:
+            # フォールバック: 従来の描画
+            self.draw_phase_fallback(info_x, info_y)
 
-        # フェーズ別の表示
+    def draw_phase_fallback(self, info_x, info_y):
+        """状態が描画メソッドを持たない場合のフォールバック"""
         current_phase = self.get_current_phase()
-
+        
         if current_phase == "intro":
-            intro_text = "Battle begins!"
-            text_width = len(intro_text) * 4
-            pyxel.text(info_x - text_width // 2, info_y, intro_text, 11)
-
-            # イニシアチブ順を表示
-            if hasattr(self, "initiative_order") and self.initiative_order:
-                order_text = "Initiative Order:"
-                pyxel.text(info_x - len(order_text) * 2, info_y + 20, order_text, 6)
-                for i, char in enumerate(
-                    self.initiative_order[:3]
-                ):  # 最初の3キャラまで表示
-                    char_type = (
-                        "Player"
-                        if char in self.battle_players
-                        else f"{char.ai_type} Enemy"
-                    )
-                    char_text = f"{char_type} (Init:{char.initiative})"
-                    pyxel.text(
-                        info_x - len(char_text) * 2, info_y + 30 + i * 8, char_text, 7
-                    )
-
+            self.draw_intro_phase(info_x, info_y)
         elif current_phase == "individual_attack":
-            if hasattr(self, "current_attacker") and self.current_attacker:
-                if self.current_attacker in self.battle_players:
-                    attack_text = f"Player (Init:{self.current_attacker.initiative}) attacks for {self.current_attack_damage} damage!"
-                    color = 11
-                else:
-                    attack_text = f"{self.current_attacker.ai_type} Enemy (Init:{self.current_attacker.initiative}) attacks for {self.current_attack_damage} damage!"
-                    color = 8
-                text_width = len(attack_text) * 4
-                pyxel.text(info_x - text_width // 2, info_y, attack_text, color)
-
+            self.draw_attack_phase(info_x, info_y)
         elif current_phase == "results":
-            result_text = "Battle concluded"
-            text_width = len(result_text) * 4
-            pyxel.text(info_x - text_width // 2, info_y, result_text, 10)
-
-            # 現在の兵力表示
-            alive_players = len([p for p in self.battle_players if p.life > 0])
-            alive_enemies = len([e for e in self.battle_enemies if e.life > 0])
-            battle_summary = f"Players: {alive_players}, Enemies: {alive_enemies}"
-            summary_width = len(battle_summary) * 4
-            pyxel.text(info_x - summary_width // 2, info_y + 20, battle_summary, 6)
-
+            self.draw_results_phase(info_x, info_y)
         elif current_phase == "outro":
-            # フェードアウト効果
-            current_state = self.state_context.current_state
-            fade_alpha = (
-                min(current_state.get_elapsed_time() * 8, 255) if current_state else 0
-            )
-            if fade_alpha < 128:
-                outro_text = "Press SPACE or ESC to continue"
-                text_width = len(outro_text) * 4
-                pyxel.text(info_x - text_width // 2, info_y + 50, outro_text, 6)
+            self.draw_outro_phase(info_x, info_y)
 
-        # ダメージナンバーの表示
+    def draw_intro_phase(self, info_x, info_y):
+        """イントロフェーズの描画"""
+        intro_text = "Battle begins!"
+        text_width = len(intro_text) * 4
+        pyxel.text(info_x - text_width // 2, info_y, intro_text, 11)
+
+        # イニシアチブ順を表示
+        if hasattr(self, "initiative_order") and self.initiative_order:
+            order_text = "Initiative Order:"
+            pyxel.text(info_x - len(order_text) * 2, info_y + 20, order_text, 6)
+            for i, char in enumerate(self.initiative_order[:3]):  # 最初の3キャラまで表示
+                char_type = (
+                    "Player"
+                    if char in self.battle_players
+                    else f"{char.ai_type} Enemy"
+                )
+                char_text = f"{char_type} (Init:{char.initiative})"
+                pyxel.text(
+                    info_x - len(char_text) * 2, info_y + 30 + i * 8, char_text, 7
+                )
+
+    def draw_attack_phase(self, info_x, info_y):
+        """攻撃フェーズの描画"""
+        if hasattr(self, "current_attacker") and self.current_attacker:
+            if self.current_attacker in self.battle_players:
+                attack_text = f"Player (Init:{self.current_attacker.initiative}) attacks for {self.current_attack_damage} damage!"
+                color = 11
+            else:
+                attack_text = f"{self.current_attacker.ai_type} Enemy (Init:{self.current_attacker.initiative}) attacks for {self.current_attack_damage} damage!"
+                color = 8
+            text_width = len(attack_text) * 4
+            pyxel.text(info_x - text_width // 2, info_y, attack_text, color)
+
+    def draw_results_phase(self, info_x, info_y):
+        """結果フェーズの描画"""
+        result_text = "Battle concluded"
+        text_width = len(result_text) * 4
+        pyxel.text(info_x - text_width // 2, info_y, result_text, 10)
+
+        # 現在の兵力表示
+        alive_players = len([p for p in self.battle_players if p.life > 0])
+        alive_enemies = len([e for e in self.battle_enemies if e.life > 0])
+        battle_summary = f"Players: {alive_players}, Enemies: {alive_enemies}"
+        summary_width = len(battle_summary) * 4
+        pyxel.text(info_x - summary_width // 2, info_y + 20, battle_summary, 6)
+
+    def draw_outro_phase(self, info_x, info_y):
+        """終了フェーズの描画"""
+        # フェードアウト効果
+        current_state = self.state_context.current_state
+        fade_alpha = (
+            min(current_state.get_elapsed_time() * 8, 255) if current_state else 0
+        )
+        if fade_alpha < 128:
+            outro_text = "Press SPACE or ESC to continue"
+            text_width = len(outro_text) * 4
+            pyxel.text(info_x - text_width // 2, info_y + 50, outro_text, 6)
+
+    def draw_damage_numbers(self):
+        """ダメージナンバーの描画"""
         for damage, attacker, timer in self.damage_numbers:
             if timer > 0:
                 # ダメージ数値の位置を攻撃対象側に表示
@@ -232,7 +267,8 @@ class BattleScene(Scene):
                 text_width = len(damage_text) * 4
                 pyxel.text(float_x - text_width // 2, float_y, damage_text, color)
 
-        # プログレスバー
+    def draw_progress_bar(self):
+        """プログレスバーの描画"""
         progress = min(1.0, self.animation_timer / self.max_animation_time)
         bar_width = pyxel.width - 40
         bar_x = 20
@@ -243,7 +279,8 @@ class BattleScene(Scene):
         # プログレスバーの進行状況
         pyxel.rect(bar_x, bar_y, int(bar_width * progress), 4, 10)
 
-        # スキップ指示
+    def draw_skip_instruction(self):
+        """スキップ指示の描画"""
         skip_text = "SPACE/ESC: Skip"
         pyxel.text(pyxel.width - len(skip_text) * 4 - 5, 5, skip_text, 6)
 
