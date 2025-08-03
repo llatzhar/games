@@ -8,7 +8,6 @@ from geometry_utils import point_too_close_to_line, roads_intersect
 
 # 都市発見の設定
 CITY_DISCOVERY_INTERVAL = 1  # nターンごとに新都市発見（n=1で毎ターン）
-CITY_DISCOVERY_DISTANCE = 3  # 既存都市からのタイル距離
 
 
 class City:
@@ -368,55 +367,6 @@ class GameState:
     def should_discover_city(self) -> bool:
         """都市発見のタイミングかどうかをチェック"""
         return self.turn_counter % CITY_DISCOVERY_INTERVAL == 0
-
-    def is_valid_city_placement(self, new_city_x, new_city_y, source_city_id):
-        """新しい都市の配置が有効かチェック（道路交差や都市との距離をチェック）"""
-        source_city = self.cities[source_city_id]
-
-        # 新しい道路の座標
-        new_road_start = (source_city.x, source_city.y)
-        new_road_end = (new_city_x, new_city_y)
-
-        # 既存の道路との交差をチェック
-        for road in self.roads:
-            city1 = self.cities[road.city1_id]
-            city2 = self.cities[road.city2_id]
-            existing_road_start = (city1.x, city1.y)
-            existing_road_end = (city2.x, city2.y)
-
-            # 新しい道路が既存の道路と交差するかチェック
-            if roads_intersect(
-                new_road_start, new_road_end, existing_road_start, existing_road_end
-            ):
-                return False
-
-        # 新しい都市が既存の道路に近すぎないかチェック
-        min_distance_to_road = 20  # 最小距離（ピクセル）
-        for road in self.roads:
-            city1 = self.cities[road.city1_id]
-            city2 = self.cities[road.city2_id]
-            existing_road_start = (city1.x, city1.y)
-            existing_road_end = (city2.x, city2.y)
-
-            # 新しい都市が既存の道路に近すぎる場合は無効
-            if point_too_close_to_line(
-                new_city_x,
-                new_city_y,
-                existing_road_start,
-                existing_road_end,
-                min_distance_to_road,
-            ):
-                return False
-
-        # 新しい都市が既存の都市に近すぎないかチェック
-        min_distance_to_city = 30  # 最小距離（ピクセル）
-        for city in self.cities.values():
-            if city.id != source_city_id:  # 接続元の都市は除外
-                distance_sq = (new_city_x - city.x) ** 2 + (new_city_y - city.y) ** 2
-                if distance_sq < min_distance_to_city**2:
-                    return False
-
-        return True
 
     def is_valid_city_placement_for_midpoint(self, new_city_x, new_city_y, city1_id, city2_id):
         """中点配置用の都市配置有効性チェック（元の道路は除外）"""
