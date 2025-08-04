@@ -466,6 +466,9 @@ class CityDiscoveryState(MapGameState):
         self.discovery_info = None
         self.display_timer = 0
         self.display_duration = 180  # 6秒間表示（30fps）
+        self.road_animation_timer = 0
+        self.road_animation_duration = 10  # 10フレームで道路アニメーション
+        self.road_animation_complete = False
 
     def enter(self):
         print("enter CityDiscoveryState")
@@ -474,9 +477,9 @@ class CityDiscoveryState(MapGameState):
         self.discovery_info = self.context.game_state.discover_new_city()
 
         if self.discovery_info:
-            # 新しい都市にカメラを移動
+            # 新しい都市にカメラを移動（上から1/4の高さ位置に配置）
             new_city = self.discovery_info["new_city"]
-            self.context.move_camera_to_city(new_city)
+            self.context.move_camera_to_city(new_city, vertical_position=0.25)
         else:
             # 都市発見に失敗した場合はすぐにプレイヤーターンへ
             self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
@@ -484,6 +487,12 @@ class CityDiscoveryState(MapGameState):
     def update(self):
         if self.discovery_info:
             self.display_timer += 1
+
+            # 道路アニメーションの更新
+            if not self.road_animation_complete:
+                self.road_animation_timer += 1
+                if self.road_animation_timer >= self.road_animation_duration:
+                    self.road_animation_complete = True
 
             # 表示時間が終了したらプレイヤーターンのカットインへ
             if self.display_timer >= self.display_duration:
@@ -499,11 +508,56 @@ class CityDiscoveryState(MapGameState):
 
     def draw_phase(self, map_scene):
         """都市発見状態の描画"""
+        # マップを描画
+        self.draw_animated_discovery(map_scene)
         # オーバーレイを描画
         self.draw_overlay()
 
+    def draw_animated_discovery(self, map_scene):
+        """新しい都市と道路アニメーションを描画"""
+        if not self.discovery_info:
+            return
+
+        new_city = self.discovery_info["new_city"]
+        connected_cities = self.discovery_info.get("connected_cities", [])
+        # 後方互換性のため、source_cityも確認
+        if not connected_cities and "source_city" in self.discovery_info:
+            connected_cities = [self.discovery_info["source_city"]]
+
+        # カメラオフセットを取得
+        camera_x = map_scene.camera_x
+        camera_y = map_scene.camera_y
+
+        # 新しい都市を描画（常に表示）
+        city_screen_x = new_city.x - camera_x
+        city_screen_y = new_city.y - camera_y
+        pyxel.circ(city_screen_x, city_screen_y, 8, 11)  # 明るい色で強調
+
+        # 道路アニメーションを描画
+        if self.road_animation_timer > 0:
+            animation_progress = min(1.0,
+                                     (self.road_animation_timer /
+                                      self.road_animation_duration))
+
+            for connected_city in connected_cities:
+                # 接続元都市も描画
+                connected_screen_x = connected_city.x - camera_x
+                connected_screen_y = connected_city.y - camera_y
+                pyxel.circ(connected_screen_x, connected_screen_y, 8, 7)
+
+                # アニメーション付きの道路を描画
+                dx = city_screen_x - connected_screen_x
+                dy = city_screen_y - connected_screen_y
+
+                # アニメーション進行に応じて線を伸ばす
+                current_x = connected_screen_x + dx * animation_progress
+                current_y = connected_screen_y + dy * animation_progress
+
+                pyxel.line(connected_screen_x, connected_screen_y,
+                           int(current_x), int(current_y), 12)  # 明るい色の道路
+
     def draw_overlay(self):
-        """都市発見表示のオーバーレイを描画"""
+        """都市発見表示のオーバーレイを描画（画面下半分）"""
         if not self.discovery_info:
             return
 
@@ -514,14 +568,16 @@ class CityDiscoveryState(MapGameState):
             connected_cities = [self.discovery_info["source_city"]]
         new_enemy = self.discovery_info.get("new_enemy")
 
-        # 背景の半透明オーバーレイ
-        pyxel.rect(0, 0, screen_width, screen_height, 0)
+        # 画面下半分に半透明オーバーレイ
+        overlay_y = screen_height // 2
+        overlay_height = screen_height // 2
+        pyxel.rect(0, overlay_y, screen_width, overlay_height, 0)
 
-        # 中央に情報ボックスを表示（敵情報を含む場合は高さを増加）
+        # 情報ボックスを画面下部に表示
         box_width = 220
-        box_height = 120 if new_enemy else 100
+        box_height = 80 if new_enemy else 60
         box_x = (screen_width - box_width) // 2
-        box_y = (screen_height - box_height) // 2
+        box_y = overlay_y + 20
 
         # ボックスの背景
         pyxel.rect(box_x, box_y, box_width, box_height, 1)
@@ -533,45 +589,33 @@ class CityDiscoveryState(MapGameState):
 
         # 接続情報を作成
         if len(connected_cities) >= 2:
-            connection_text1 = f"Connected to: {connected_cities[0].name}"
-            connection_text2 = f"and {connected_cities[1].name}"
+            connection_text = (f"Connected to {connected_cities[0].name} "
+                               f"and {connected_cities[1].name}")
         elif len(connected_cities) == 1:
-            connection_text1 = f"Connected to: {connected_cities[0].name}"
-            connection_text2 = ""
+            connection_text = f"Connected to {connected_cities[0].name}"
         else:
-            connection_text1 = "Connected to unknown cities"
-            connection_text2 = ""
+            connection_text = "Connected to unknown cities"
 
         skip_text = "Press SPACE to continue"
 
         # テキストを中央揃えで表示
         title_x = box_x + (box_width - len(title_text) * 4) // 2
         city_x = box_x + (box_width - len(city_text) * 4) // 2
-        connection1_x = box_x + (box_width - len(connection_text1) * 4) // 2
-        connection2_x = (
-            box_x + (box_width - len(connection_text2) * 4) // 2
-            if connection_text2
-            else 0
-        )
+        connection_x = box_x + (box_width - len(connection_text) * 4) // 2
         skip_x = box_x + (box_width - len(skip_text) * 4) // 2
 
         pyxel.text(title_x, box_y + 10, title_text, 11)
         pyxel.text(city_x, box_y + 25, city_text, 7)
-        pyxel.text(connection1_x, box_y + 35, connection_text1, 7)
-        if connection_text2:
-            pyxel.text(connection2_x, box_y + 45, connection_text2, 7)
+        pyxel.text(connection_x, box_y + 35, connection_text, 7)
 
         # 敵情報を表示（存在する場合）
         if new_enemy:
             enemy_text = f"Enemy ({new_enemy.ai_type}) appeared!"
             enemy_x = box_x + (box_width - len(enemy_text) * 4) // 2
-            text_y = box_y + 55 if connection_text2 else box_y + 45
-            pyxel.text(enemy_x, text_y, enemy_text, 8)
-            skip_y = text_y + 20
-            pyxel.text(skip_x, skip_y, skip_text, 6)
+            pyxel.text(enemy_x, box_y + 45, enemy_text, 8)
+            pyxel.text(skip_x, box_y + 60, skip_text, 6)
         else:
-            skip_y = box_y + 55 if connection_text2 else box_y + 45
-            pyxel.text(skip_x, skip_y, skip_text, 6)
+            pyxel.text(skip_x, box_y + 50, skip_text, 6)
 
     def exit(self):
         pass

@@ -516,10 +516,16 @@ class MapScene(Scene):
             # 少し待ってから戦闘サブシーンを開始
             self.battle_camera_timer = 60  # 2秒待機
 
-    def move_camera_to_city(self, city):
-        """カメラを指定した都市に移動"""
+    def move_camera_to_city(self, city, vertical_position=0.5):
+        """カメラを指定した都市に移動
+
+        Args:
+            city: 移動先の都市
+            vertical_position: 都市の垂直位置 (0.0=画面上端, 0.5=中央, 1.0=画面下端)
+        """
         target_camera_x = city.x - self.camera_offset_x
-        target_camera_y = city.y - self.camera_offset_y
+        # 垂直位置を調整
+        target_camera_y = city.y - (screen_height * vertical_position)
 
         # マップ範囲内に制限
         target_camera_x = max(
