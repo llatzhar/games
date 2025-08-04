@@ -93,6 +93,8 @@ class PlayerTurnState(MapGameState):
                         self.context.selected_player.target_city_id = clicked_city_id
                         self.context.selected_player.is_moving = True
                         self.context.game_state.player_moved_this_turn = True
+                        # 移動開始時に選択を解除
+                        self.context.selected_player = None
                         self.context.game_state.auto_save()
 
         # ESCキーで選択解除
@@ -100,7 +102,8 @@ class PlayerTurnState(MapGameState):
             self.context.selected_player = None
 
     def exit(self):
-        pass
+        # プレイヤーターン終了時に選択を解除
+        self.context.selected_player = None
 
 
 class EnemySelectionState(MapGameState):
@@ -467,7 +470,7 @@ class CityDiscoveryState(MapGameState):
         self.display_timer = 0
         self.display_duration = 180  # 6秒間表示（30fps）
         self.road_animation_timer = 0
-        self.road_animation_duration = 10  # 10フレームで道路アニメーション
+        self.road_animation_duration = 100  # 10フレームで道路アニメーション
         self.road_animation_complete = False
 
     def enter(self):

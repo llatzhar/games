@@ -181,7 +181,10 @@ class MapGameState(ABC):
                 self.draw_life_gauge(player, player_screen_x, player_screen_y)
 
                 # 選択されたプレイヤーに点滅する枠線を描画
-                if player == map_scene.selected_player:
+                # プレイヤーターン中かつプレイヤーが移動していない場合のみ表示
+                if (player == map_scene.selected_player and
+                        self.context.game_state.current_turn == "player" and
+                        not player.is_moving):
                     self.draw_character_selection_frame(
                         player, player_screen_x, player_screen_y, 11
                     )
