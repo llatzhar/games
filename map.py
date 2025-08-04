@@ -16,9 +16,6 @@ from map_states import PlayerTurnState
 class MapScene(Scene):
     def __init__(self):
         super().__init__()
-        self.click_x = -1  # クリック位置のX座標
-        self.click_y = -1  # クリック位置のY座標
-        self.click_timer = 0  # クリック座標表示時間
         self.selected_player = None  # 選択中のプレイヤー
         self.debug_page = 0  # デバッグ情報のページ番号 (0=非表示, 1〜3=ページ)
         self.max_debug_page = 3  # デバッグページの最大数
@@ -638,10 +635,6 @@ class MapScene(Scene):
             battle_state.on_battle_finished()
             return self
 
-        # クリック座標表示時間を減らす
-        if self.click_timer > 0:
-            self.click_timer -= 1
-
         # カメラ追従の更新処理
         self.update_camera_follow()
 
@@ -908,25 +901,20 @@ class MapScene(Scene):
                 battle_y = legend_y - 20
                 pyxel.text(5, battle_y, battle_info, 13)
 
-            # マウスクリック座標を表示
-            if self.click_timer > 0:
-                coord_text = f"Click: ({self.click_x}, {self.click_y})"
-                click_y = (
-                    legend_y - 30
-                    if self.is_processing_battles
-                    else legend_y - 20
-                )
-                pyxel.text(5, click_y, coord_text, 8)
+            # 現在のマウス座標を表示
+            # スクリーン座標からワールド座標に変換
+            world_x = pyxel.mouse_x + self.camera_x
+            world_y = pyxel.mouse_y + self.camera_y
+            # ワールド座標からタイル座標に変換
+            tile_x, tile_y = self.pixel_to_tile(world_x, world_y)
 
-            # 現在のマウス座標も表示
-            mouse_text = f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y})"
+            mouse_text = (
+                f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y}) "
+                f"Tile: ({tile_x}, {tile_y})"
+            )
             mouse_y = (
-                click_y - 10
-                if self.click_timer > 0
-                else (
-                    legend_y - 30
-                    if self.is_processing_battles
-                    else legend_y - 20
-                )
+                legend_y - 30
+                if self.is_processing_battles
+                else legend_y - 20
             )
             pyxel.text(5, mouse_y, mouse_text, 10)

@@ -66,16 +66,12 @@ class PlayerTurnState(MapGameState):
 
         # マウスクリック処理
         if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
-            self.context.click_x = pyxel.mouse_x
-            self.context.click_y = pyxel.mouse_y
-            self.context.click_timer = 120
-
             if self.context.can_move_this_turn():
                 clicked_player = self.context.get_player_at_position(
-                    self.context.click_x, self.context.click_y
+                    pyxel.mouse_x, pyxel.mouse_y
                 )
                 clicked_city = self.context.get_city_at_position(
-                    self.context.click_x, self.context.click_y
+                    pyxel.mouse_x, pyxel.mouse_y
                 )
 
                 if clicked_player:
