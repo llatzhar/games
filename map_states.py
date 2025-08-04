@@ -501,6 +501,11 @@ class CityDiscoveryState(MapGameState):
             if self.discovery_info:
                 self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
 
+    def draw_phase(self, map_scene):
+        """都市発見状態の描画"""
+        # オーバーレイを描画
+        self.draw_overlay()
+
     def draw_overlay(self):
         """都市発見表示のオーバーレイを描画"""
         if not self.discovery_info:
@@ -597,6 +602,11 @@ class GameOverState(MapGameState):
 
             # 新しいシーンを返すために、コンテキストに通知
             self.context.next_scene = TitleScene()
+
+    def draw_phase(self, map_scene):
+        """ゲーム終了状態の描画"""
+        # オーバーレイを描画
+        self.draw_overlay()
 
     def draw_overlay(self):
         """ゲーム終了画面のオーバーレイを描画"""

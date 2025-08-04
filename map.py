@@ -712,16 +712,6 @@ class MapScene(Scene):
             mouse_x, mouse_y, hovered_character, hovered_city, self.game_state
         )
 
-        # ゲーム終了状態の場合はオーバーレイ表示
-        from map_state_machine import MapStateType
-
-        if (
-            self.state_context.get_current_state_type() == MapStateType.GAME_OVER
-            or self.state_context.get_current_state_type() == MapStateType.VICTORY
-        ):
-            if hasattr(self.state_context.current_state, "draw_overlay"):
-                self.state_context.current_state.draw_overlay()
-
         # デバッグ情報の表示（ページ切り替え対応）
         if self.debug_page > 0:
             self.draw_debug_page(self.debug_page)
