@@ -910,42 +910,21 @@ class MapScene(Scene):
             pyxel.circ(80, legend_y + 16, 2, 14)  # ピンク
             pyxel.text(85, legend_y + 14, "Random", 7)
 
-            # AI情報を表示（エネミーターン時）
-            if self.game_state.current_turn == "enemy":
-                ai_timer = self.game_state.ai_timer
-                ai_delay = self.game_state.ai_decision_delay
-                ai_info = f"AI Timer: {ai_timer}/{ai_delay}"
-                pyxel.text(5, legend_y - 20, ai_info, 8)
-
             # 戦闘処理状態を表示
             if self.is_processing_battles:
                 current_battle = self.current_battle_index + 1
                 total_battles = len(self.pending_battle_results)
                 battle_info = f"Processing battles: {current_battle}/{total_battles}"
-                battle_y = (
-                    legend_y - 30
-                    if self.game_state.current_turn == "enemy"
-                    else legend_y - 20
-                )
+                battle_y = legend_y - 20
                 pyxel.text(5, battle_y, battle_info, 13)
 
             # マウスクリック座標を表示
             if self.click_timer > 0:
                 coord_text = f"Click: ({self.click_x}, {self.click_y})"
                 click_y = (
-                    legend_y - 40
-                    if (
-                        self.is_processing_battles
-                        and self.game_state.current_turn == "enemy"
-                    )
-                    else (
-                        legend_y - 30
-                        if (
-                            self.is_processing_battles
-                            or self.game_state.current_turn == "enemy"
-                        )
-                        else legend_y - 20
-                    )
+                    legend_y - 30
+                    if self.is_processing_battles
+                    else legend_y - 20
                 )
                 pyxel.text(5, click_y, coord_text, 8)
 
@@ -955,19 +934,9 @@ class MapScene(Scene):
                 click_y - 10
                 if self.click_timer > 0
                 else (
-                    legend_y - 40
-                    if (
-                        self.is_processing_battles
-                        and self.game_state.current_turn == "enemy"
-                    )
-                    else (
-                        legend_y - 30
-                        if (
-                            self.is_processing_battles
-                            or self.game_state.current_turn == "enemy"
-                        )
-                        else legend_y - 20
-                    )
+                    legend_y - 30
+                    if self.is_processing_battles
+                    else legend_y - 20
                 )
             )
             pyxel.text(5, mouse_y, mouse_text, 10)

@@ -210,8 +210,6 @@ class TestGameState(unittest.TestCase):
         self.assertEqual(self.game_state.turn_counter, 1)
         self.assertFalse(self.game_state.player_moved_this_turn)
         self.assertFalse(self.game_state.enemy_moved_this_turn)
-        self.assertEqual(self.game_state.ai_timer, 0)
-        self.assertEqual(self.game_state.ai_decision_delay, 60)
         self.assertIsNone(self.game_state.current_ai_enemy_index)
         self.assertEqual(len(self.game_state.cities), 0)
         self.assertEqual(len(self.game_state.roads), 0)
