@@ -177,8 +177,8 @@ class BattleGameState(ABC):
         src_x = anim_frame * 16
         src_y = character.image_index * 16
 
-        # 向きに応じて描画幅を調整
-        draw_width = character.width if facing_right else -character.width
+        # 向きに応じて描画幅を調整（map.pyと同じ論理に修正）
+        draw_width = character.width if not facing_right else -character.width
 
         pyxel.blt(
             int(x - half_width),

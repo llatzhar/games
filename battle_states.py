@@ -216,7 +216,7 @@ class BattleIndividualAttackState(BattleGameState):
                 initial_life = self.context.initial_player_lives[i]
                 self.draw_character(
                     player, draw_x, draw_y, True, initial_life, "player"
-                )  # 右向き
+                )  # 右向き（敵の方を向く）
 
                 # プレイヤー名を表示
                 name_text = f"Player {i+1}"
@@ -245,7 +245,7 @@ class BattleIndividualAttackState(BattleGameState):
                 initial_life = self.context.initial_enemy_lives[i]
                 self.draw_character(
                     enemy, draw_x, draw_y, False, initial_life, "enemy"
-                )  # 左向き
+                )  # 左向き（プレイヤーの方を向く）
 
                 # 敵名を表示
                 name_text = f"Enemy {i+1}"
