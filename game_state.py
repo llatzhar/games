@@ -438,8 +438,8 @@ class GameState:
 
         return True
 
-    def discover_new_city(self):
-        """新しい都市を発見して追加（道路の中点付近に配置）"""
+    def plan_new_city(self):
+        """新しい都市の配置を計画（GameStateは変更しない）"""
         if not self.roads:
             return None  # 既存道路がない場合は何もしない
 
@@ -537,24 +537,49 @@ class GameState:
         else:
             new_city_name = f"City{new_city_id}"
 
-        # 新都市を作成
+        # 新都市オブジェクトを作成（まだGameStateには追加しない）
         new_city = City(new_city_id, new_city_name, chosen_x, chosen_y)
-        self.cities[new_city_id] = new_city
+
+        # 新都市に配置する敵キャラクターを生成（接続都市IDを渡す）
+        new_enemy = self._create_enemy_for_new_city(
+            chosen_x, chosen_y, new_city_id, [city1_id, city2_id]
+        )
+
+        # 発見計画の情報を返す
+        return {
+            "new_city": new_city,
+            "connected_city_ids": [city1_id, city2_id],
+            "connected_cities": [self.cities[city1_id], self.cities[city2_id]],
+            "tile_position": (chosen_tile_x, chosen_tile_y),
+            "new_enemy": new_enemy,
+        }
+
+    def apply_city_discovery(self, discovery_plan):
+        """都市発見計画をGameStateに適用"""
+        if not discovery_plan:
+            return False
+
+        new_city = discovery_plan["new_city"]
+        city1_id, city2_id = discovery_plan["connected_city_ids"]
+        new_enemy = discovery_plan["new_enemy"]
+        chosen_tile_x, chosen_tile_y = discovery_plan["tile_position"]
+
+        # 新都市をGameStateに追加
+        self.cities[new_city.id] = new_city
 
         # 選択された2つの既存都市と新都市を道路で接続
-        new_road1 = Road(city1_id, new_city_id)
-        new_road2 = Road(city2_id, new_city_id)
+        new_road1 = Road(city1_id, new_city.id)
+        new_road2 = Road(city2_id, new_city.id)
         self.roads.append(new_road1)
         self.roads.append(new_road2)
 
         # 新都市に敵キャラクターを配置
-        new_enemy = self._create_enemy_for_new_city(chosen_x, chosen_y, new_city_id)
         if new_enemy:
             self.enemies.append(new_enemy)
-            print(f"New enemy ({new_enemy.ai_type}) spawned in {new_city_name}")
+            print(f"New enemy ({new_enemy.ai_type}) spawned in {new_city.name}")
 
         print(
-            f"New city discovered: {new_city_name} (ID: {new_city_id}) "
+            f"New city discovered: {new_city.name} (ID: {new_city.id}) "
             f"at tile ({chosen_tile_x}, {chosen_tile_y})"
         )
         print(
@@ -564,19 +589,23 @@ class GameState:
 
         # 自動セーブ
         self.auto_save()
+        return True
 
-        # 発見した都市の情報を返す
-        return {
-            "new_city": new_city,
-            "connected_cities": [self.cities[city1_id], self.cities[city2_id]],
-            "tile_position": (chosen_tile_x, chosen_tile_y),
-            "new_enemy": new_enemy,
-        }
+    def discover_new_city(self):
+        """新しい都市を発見して追加（後方互換性のため残存）"""
+        # 計画を立てて即座に適用
+        discovery_plan = self.plan_new_city()
+        if discovery_plan:
+            self.apply_city_discovery(discovery_plan)
+        return discovery_plan
 
     def _create_enemy_for_new_city(
-        self, x: float, y: float, city_id: int
+        self, x: float, y: float, city_id: int, connected_city_ids: List[int] = None
     ) -> Optional[Enemy]:
         """新都市用の敵キャラクターを生成"""
+        if connected_city_ids is None:
+            connected_city_ids = []
+
         # AIタイプをランダムに選択（バランスを考慮した重み付き）
         ai_types_with_weights = [
             ("random", 0.4),  # 40% - 最も一般的
@@ -604,14 +633,10 @@ class GameState:
         )
 
         # パトロールタイプの場合、近隣都市をパトロール経路に設定
-        if selected_ai_type == "patrol":
-            connected_cities = self.get_connected_city_ids(city_id)
-            if connected_cities:
-                # 新都市と接続都市を含むパトロール経路を設定
-                new_enemy.patrol_city_ids = [city_id] + connected_cities[
-                    :2
-                ]  # 最大3都市
-                new_enemy.patrol_index = 0
+        if selected_ai_type == "patrol" and connected_city_ids:
+            # 新都市と接続都市を含むパトロール経路を設定
+            new_enemy.patrol_city_ids = [city_id] + connected_city_ids[:2]  # 最大3都市
+            new_enemy.patrol_index = 0
 
         return new_enemy
 

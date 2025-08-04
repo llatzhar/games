@@ -802,8 +802,7 @@ class MapScene(Scene):
                 enemy_max_life = self.selected_enemy.max_life
                 enemy_attack = self.selected_enemy.attack
                 status_text = (
-                    f"  Life: {enemy_life}/{enemy_max_life}, "
-                    f"Attack: {enemy_attack}"
+                    f"  Life: {enemy_life}/{enemy_max_life}, " f"Attack: {enemy_attack}"
                 )
                 pyxel.text(5, 85, status_text, 8)
             else:
@@ -819,10 +818,10 @@ class MapScene(Scene):
 
             # カメラ追従情報を表示
             if self.camera_follow_target:
-                if hasattr(self.camera_follow_target, 'ai_type'):
+                if hasattr(self.camera_follow_target, "ai_type"):
                     target_type = self.camera_follow_target.ai_type
                 else:
-                    target_type = 'Player'
+                    target_type = "Player"
                 follow_info = f"Camera following: {target_type}"
                 pyxel.text(5, 35, follow_info, 13)
             else:
@@ -853,9 +852,7 @@ class MapScene(Scene):
                 )
                 # 都市の表示名を取得
                 if player_city_id is not None:
-                    display_name = self.game_state.get_city_display_name(
-                        player_city_id
-                    )
+                    display_name = self.game_state.get_city_display_name(player_city_id)
                 else:
                     display_name = "None"
                 player_info = (
@@ -873,14 +870,10 @@ class MapScene(Scene):
                 enemy_city_id = enemy.current_city_id if enemy.current_city_id else None
                 # 都市の表示名を取得
                 if enemy_city_id is not None:
-                    display_name = self.game_state.get_city_display_name(
-                        enemy_city_id
-                    )
+                    display_name = self.game_state.get_city_display_name(enemy_city_id)
                 else:
                     display_name = "None"
-                enemy_info = (
-                    f"Enemy {i+1} ({enemy.ai_type}) at {display_name}:"
-                )
+                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {display_name}:"
                 pyxel.text(5, y_pos, enemy_info, 8)
                 y_pos += 10
                 life_info = f"  Life {enemy.life}/{enemy.max_life}"
@@ -918,9 +911,5 @@ class MapScene(Scene):
                 f"Mouse: ({pyxel.mouse_x}, {pyxel.mouse_y}) "
                 f"Tile: ({tile_x}, {tile_y})"
             )
-            mouse_y = (
-                legend_y - 30
-                if self.is_processing_battles
-                else legend_y - 20
-            )
+            mouse_y = legend_y - 30 if self.is_processing_battles else legend_y - 20
             pyxel.text(5, mouse_y, mouse_text, 10)

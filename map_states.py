@@ -467,6 +467,7 @@ class CityDiscoveryState(MapGameState):
     def __init__(self, context):
         super().__init__(context, MapStateType.CITY_DISCOVERY)
         self.discovery_info = None
+        self.discovery_plan = None  # 都市発見計画を保存
         self.display_timer = 0
         self.display_duration = 180  # 6秒間表示（30fps）
         self.road_animation_timer = 0
@@ -476,15 +477,20 @@ class CityDiscoveryState(MapGameState):
     def enter(self):
         print("enter CityDiscoveryState")
         super().enter()
-        # 都市発見を実行
-        self.discovery_info = self.context.game_state.discover_new_city()
+        # 都市発見計画を立てる（GameStateは変更しない）
+        self.discovery_plan = self.context.game_state.plan_new_city()
 
-        if self.discovery_info:
+        if self.discovery_plan:
             # 新しい都市にカメラを移動（上から1/4の高さ位置に配置）
-            new_city = self.discovery_info["new_city"]
+            new_city = self.discovery_plan["new_city"]
             self.context.move_camera_to_city(new_city, vertical_position=0.25)
+
+            # 表示用に discovery_info も設定（後方互換性のため）
+            self.discovery_info = self.discovery_plan
         else:
             # 都市発見に失敗した場合はすぐにプレイヤーターンへ
+            self.discovery_plan = None
+            self.discovery_info = None
             self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
 
     def update(self):
@@ -499,7 +505,7 @@ class CityDiscoveryState(MapGameState):
 
             # 表示時間が終了したらプレイヤーターンのカットインへ
             if self.display_timer >= self.display_duration:
-                self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
+                self._apply_discovery_and_transition()
 
         return self.context
 
@@ -507,7 +513,15 @@ class CityDiscoveryState(MapGameState):
         # SPACEキーまたはマウスクリックでスキップ可能
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             if self.discovery_info:
-                self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
+                self._apply_discovery_and_transition()
+
+    def _apply_discovery_and_transition(self):
+        """都市発見計画を適用してプレイヤーターンに遷移"""
+        if hasattr(self, 'discovery_plan') and self.discovery_plan:
+            # 都市発見計画をGameStateに適用
+            self.context.game_state.apply_city_discovery(self.discovery_plan)
+
+        self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
 
     def draw_phase(self, map_scene):
         """都市発見状態の描画"""
@@ -538,9 +552,9 @@ class CityDiscoveryState(MapGameState):
 
         # 道路アニメーションを描画
         if self.road_animation_timer > 0:
-            animation_progress = min(1.0,
-                                     (self.road_animation_timer /
-                                      self.road_animation_duration))
+            animation_progress = min(
+                1.0, (self.road_animation_timer / self.road_animation_duration)
+            )
 
             for connected_city in connected_cities:
                 # 接続元都市も描画
@@ -556,8 +570,13 @@ class CityDiscoveryState(MapGameState):
                 current_x = connected_screen_x + dx * animation_progress
                 current_y = connected_screen_y + dy * animation_progress
 
-                pyxel.line(connected_screen_x, connected_screen_y,
-                           int(current_x), int(current_y), 12)  # 明るい色の道路
+                pyxel.line(
+                    connected_screen_x,
+                    connected_screen_y,
+                    int(current_x),
+                    int(current_y),
+                    12,
+                )  # 明るい色の道路
 
     def draw_overlay(self):
         """都市発見表示のオーバーレイを描画（画面下半分）"""
@@ -592,8 +611,10 @@ class CityDiscoveryState(MapGameState):
 
         # 接続情報を作成
         if len(connected_cities) >= 2:
-            connection_text = (f"Connected to {connected_cities[0].name} "
-                               f"and {connected_cities[1].name}")
+            connection_text = (
+                f"Connected to {connected_cities[0].name} "
+                f"and {connected_cities[1].name}"
+            )
         elif len(connected_cities) == 1:
             connection_text = f"Connected to {connected_cities[0].name}"
         else:
