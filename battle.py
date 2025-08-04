@@ -140,10 +140,7 @@ class BattleScene(Scene):
         # 共通背景描画
         self.draw_background()
         
-        # キャラクター描画
-        self.draw_battle_characters()
-        
-        # 状態固有の描画を委譲
+        # 状態固有の描画を委譲（キャラクター描画を含む）
         self.draw_phase_content()
         
         # 共通UI要素
@@ -168,7 +165,7 @@ class BattleScene(Scene):
         text_width = len(city_text) * 4
         pyxel.text(info_x - text_width // 2, info_y - 30, city_text, 7)
         
-        # 現在の状態に描画を委譲
+        # 現在の状態に描画を委譲（キャラクター描画と固有コンテンツ）
         current_state = self.state_context.current_state
         if hasattr(current_state, 'draw_phase'):
             current_state.draw_phase()

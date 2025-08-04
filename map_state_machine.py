@@ -109,6 +109,107 @@ class BattleGameState(ABC):
         """状態に入ってからの経過時間（フレーム数）"""
         return pyxel.frame_count - self.enter_time
 
+    def draw_battle_characters(self):
+        """戦闘キャラクターの描画（各状態でオーバーライド可能）"""
+        # プレイヤーキャラクターを左側に描画
+        player_start_x = 50
+        player_y = pyxel.height // 2 + 20
+
+        for i, player in enumerate(self.context.battle_players):
+            # プレイヤーの描画位置（縦に並べる）
+            draw_x = player_start_x
+            draw_y = player_y + i * 40  # 40ピクセル間隔で縦に配置
+
+            # プレイヤーが画面内に収まるかチェック
+            if draw_y + player.height < pyxel.height - 20:
+                initial_life = self.context.initial_player_lives[i]
+                self.draw_character(
+                    player, draw_x, draw_y, True, initial_life, "player"
+                )  # 右向き
+
+                # プレイヤー名を表示
+                name_text = f"Player {i+1}"
+                pyxel.text(draw_x - len(name_text) * 2, draw_y - 25, name_text, 11)
+
+                # ライフ表示（戦闘の進行に応じて変化）
+                displayed_life = self.context.get_displayed_life(player, initial_life, "player")
+                life_text = f"HP: {displayed_life}/{player.max_life}"
+                pyxel.text(draw_x - len(life_text) * 2, draw_y - 15, life_text, 7)
+
+        # 敵キャラクターを右側に描画
+        enemy_start_x = pyxel.width - 80
+        enemy_y = pyxel.height // 2 + 20
+
+        for i, enemy in enumerate(self.context.battle_enemies):
+            # 敵の描画位置（縦に並べる）
+            draw_x = enemy_start_x
+            draw_y = enemy_y + i * 40  # 40ピクセル間隔で縦に配置
+
+            # 敵が画面内に収まるかチェック
+            if draw_y + enemy.height < pyxel.height - 20:
+                initial_life = self.context.initial_enemy_lives[i]
+                self.draw_character(
+                    enemy, draw_x, draw_y, False, initial_life, "enemy"
+                )  # 左向き
+
+                # 敵名を表示
+                name_text = f"Enemy {i+1}"
+                pyxel.text(draw_x + 20, draw_y - 25, name_text, 8)
+
+                # AI種別を表示
+                ai_text = f"({enemy.ai_type})"
+                pyxel.text(draw_x + 20, draw_y - 15, ai_text, 6)
+
+                # ライフ表示（戦闘の進行に応じて変化）
+                displayed_life = self.context.get_displayed_life(
+                    enemy, self.context.initial_enemy_lives[i], "enemy"
+                )
+                life_text = f"HP: {displayed_life}/{enemy.max_life}"
+                pyxel.text(draw_x + 20, draw_y - 5, life_text, 7)
+
+    def draw_character(self, character, x, y, facing_right, initial_life, character_type):
+        """キャラクターを指定位置に描画（各状態でオーバーライド可能）"""
+        half_width = character.width // 2
+        half_height = character.height // 2
+
+        # アニメーションフレームを計算（戦闘中はゆっくりとしたアニメーション）
+        anim_frame = (pyxel.frame_count // 20) % 2
+        src_x = anim_frame * 16
+        src_y = character.image_index * 16
+
+        # 向きに応じて描画幅を調整
+        draw_width = character.width if facing_right else -character.width
+
+        pyxel.blt(
+            int(x - half_width),
+            int(y - half_height),
+            0,  # Image Bank 0
+            src_x,
+            src_y,
+            draw_width,
+            character.height,
+            2,  # 透明色
+        )
+
+        # ライフゲージを描画（戦闘進行に応じた値を使用）
+        life_bar_width = character.width
+        life_bar_height = 3
+        life_bar_x = int(x - half_width)
+        life_bar_y = int(y - half_height - 10)
+
+        # ライフゲージの背景（赤色）
+        pyxel.rect(life_bar_x, life_bar_y, life_bar_width, life_bar_height, 8)
+
+        # 戦闘進行に応じた表示ライフ値を取得
+        displayed_life = self.context.get_displayed_life(
+            character, initial_life, character_type
+        )
+
+        # ライフゲージの現在値（緑色）
+        current_life_width = int((displayed_life / character.max_life) * life_bar_width)
+        if current_life_width > 0:
+            pyxel.rect(life_bar_x, life_bar_y, current_life_width, life_bar_height, 11)
+
 
 class StateContext:
     """状態管理コンテキスト"""
