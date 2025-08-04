@@ -84,6 +84,7 @@ class MapScene(Scene):
 
         # 状態マシン初期化
         self.state_context = StateContext()
+        self.state_context.game_state = self.game_state  # GameStateの参照を設定
         self.state_context.change_state(PlayerTurnState(self))
 
         # シーン遷移用
@@ -775,374 +776,22 @@ class MapScene(Scene):
         # メインの描画
         pyxel.cls(3)  # 背景色
 
-        # 画面に表示するタイルの範囲を計算
-        start_col = int(self.camera_x // self.tile_size)
-        end_col = min(
-            int((self.camera_x + screen_width) // self.tile_size) + 1, self.map_width
-        )
-        start_row = int(self.camera_y // self.tile_size)
-        end_row = min(
-            int((self.camera_y + screen_height) // self.tile_size) + 1, self.map_height
-        )
+        # 状態マシンに描画を委譲
+        if self.state_context.current_state:
+            # 共通の背景描画
+            self.state_context.current_state.draw_map_background(self)
+            self.state_context.current_state.draw_roads(self)
+            self.state_context.current_state.draw_cities(self)
+            self.state_context.current_state.draw_map_characters(self)
 
-        # マップを描画（カメラ位置を考慮）
-        for row in range(start_row, end_row):
-            for col in range(start_col, end_col):
-                if 0 <= row < self.map_height and 0 <= col < self.map_width:
-                    x = col * self.tile_size - self.camera_x
-                    y = row * self.tile_size - self.camera_y
+            # 状態固有の描画
+            self.state_context.current_state.draw_phase(self)
 
-                    if self.map_data[row][col] == 1:
-                        # 壁（茶色）
-                        pyxel.rect(x, y, self.tile_size, self.tile_size, 4)
-                    else:
-                        # 床（薄い色）
-                        pyxel.rect(x, y, self.tile_size, self.tile_size, 6)
+        # UI表示（全状態共通）
+        self.draw_ui()
 
-        # 道路を描画（Cityよりも先に描画して背景に）
-        for road in self.game_state.roads:
-            city1 = self.game_state.get_city_by_id(road.city1_id)
-            city2 = self.game_state.get_city_by_id(road.city2_id)
-
-            if city1 and city2:
-                city1_screen_x = city1.x - self.camera_x
-                city1_screen_y = city1.y - self.camera_y
-                city2_screen_x = city2.x - self.camera_x
-                city2_screen_y = city2.y - self.camera_y
-
-                # 線分が画面と交差するかチェック（より正確な判定）
-                if self.line_intersects_screen(
-                    city1_screen_x, city1_screen_y, city2_screen_x, city2_screen_y
-                ):
-                    pyxel.line(
-                        city1_screen_x,
-                        city1_screen_y,
-                        city2_screen_x,
-                        city2_screen_y,
-                        9,
-                    )  # オレンジ色の線
-
-        # Cityを描画
-        for city_name, city in self.game_state.cities.items():
-            city_screen_x = city.x - self.camera_x
-            city_screen_y = city.y - self.camera_y
-
-            # Cityが画面内にある場合のみ描画
-            if (
-                -city.size <= city_screen_x <= screen_width + city.size
-                and -city.size <= city_screen_y <= screen_height + city.size
-            ):
-
-                half_size = city.size // 2
-                # City本体（青色の円）
-                pyxel.circb(city_screen_x, city_screen_y, half_size, 12)  # 青色の枠
-                pyxel.circ(
-                    city_screen_x, city_screen_y, half_size - 2, 1
-                )  # 濃い青の内部
-
-                # City名前を表示（表示名を使用）
-                display_name = city.name  # 既に表示名が設定されている
-                text_x = city_screen_x - len(display_name) * 2
-                text_y = city_screen_y + half_size + 2
-                pyxel.text(text_x, text_y, display_name, 7)  # 白文字
-
-        # キャラクターの描画位置を計算（重なりを防ぐ）
-        character_positions = (
-            self.get_character_positions_by_city()
-        )  # City毎にキャラクターのリストを管理
-
-        # プレイヤーを描画（カメラ位置を考慮、重なり防止）
-        for i, player in enumerate(self.game_state.players):
-            # キャラクターの描画位置を計算
-            if player.current_city_id and not player.is_moving:
-                # 移動中でない場合のみ同じCity内での位置調整を行う
-                current_city = self.game_state.get_city_by_id(player.current_city_id)
-                if current_city and current_city in character_positions:
-                    city_characters = character_positions[current_city]
-                    char_index = next(
-                        (
-                            idx
-                            for idx, (char_type, char) in enumerate(city_characters)
-                            if char_type == "player" and char == player
-                        ),
-                        0,
-                    )
-
-                    # 複数キャラクターがいる場合は横に並べる
-                    offset_x = 0
-                    if len(city_characters) > 1:
-                        total_width = len(city_characters) * player.width
-                        start_x = -(total_width - player.width) // 2
-                        offset_x = start_x + char_index * player.width
-
-                    player_screen_x = player.x + offset_x - self.camera_x
-                else:
-                    player_screen_x = player.x - self.camera_x
-            else:
-                # 移動中または現在のCityがない場合はオフセットなし
-                player_screen_x = player.x - self.camera_x
-
-            player_screen_y = player.y - self.camera_y
-
-            # プレイヤーが画面内にある場合のみ描画
-            if (
-                -player.width <= player_screen_x <= screen_width + player.width
-                and -player.height <= player_screen_y <= screen_height + player.height
-            ):
-                # プレイヤーキャラクター（resources.pyxresのImage0、image_indexに基づく段を使用）
-                half_width = player.width // 2
-                half_height = player.height // 2
-
-                # アニメーションフレームを計算（2つのフレームを交互に表示）
-                anim_frame = (pyxel.frame_count // 10) % 2
-                src_x = anim_frame * 16  # 0または16
-                src_y = player.image_index * 16  # image_indexに基づいてY座標を計算
-
-                # 向いている方向に応じて描画幅を調整（右向きの場合は負の値で反転）
-                draw_width = player.width if not player.facing_right else -player.width
-
-                pyxel.blt(
-                    int(player_screen_x - half_width),
-                    int(player_screen_y - half_height),
-                    0,  # Image Bank 0
-                    src_x,  # ソース画像のX座標（0または16）
-                    src_y,  # ソース画像のY座標（image_indexに基づく）
-                    draw_width,  # 幅（負の値で左右反転）
-                    player.height,  # 高さ
-                    2,  # 透明色（紫色を透明にする）
-                )
-
-                # ライフゲージを表示
-                life_bar_width = player.width
-                life_bar_height = 3
-                life_bar_x = int(player_screen_x - half_width)
-                life_bar_y = int(player_screen_y - half_height - 8)
-
-                # ライフゲージの背景（赤色）
-                pyxel.rect(life_bar_x, life_bar_y, life_bar_width, life_bar_height, 8)
-
-                # ライフゲージの現在値（緑色）
-                current_life_width = int(
-                    (player.life / player.max_life) * life_bar_width
-                )
-                if current_life_width > 0:
-                    pyxel.rect(
-                        life_bar_x, life_bar_y, current_life_width, life_bar_height, 11
-                    )
-
-                # 選択されたプレイヤーに点滅する枠線を描画
-                if player == self.selected_player:
-                    # 点滅効果（30フレームで1回点滅）
-                    if (
-                        pyxel.frame_count // 10
-                    ) % 3 != 0:  # 枠線の色（明るい色で目立つように）
-                        frame_color = 11  # ライトブルー
-
-                        # 枠線を描画
-                        frame_x = int(player_screen_x - half_width - 1)
-                        frame_y = int(player_screen_y - half_height - 1)
-                        frame_w = player.width + 2
-                        frame_h = player.height + 2
-
-                        # 上下の線
-                        pyxel.rect(frame_x, frame_y, frame_w, 1, frame_color)
-                        pyxel.rect(
-                            frame_x, frame_y + frame_h - 1, frame_w, 1, frame_color
-                        )
-                        # 左右の線
-                        pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
-                        pyxel.rect(
-                            frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color
-                        )
-
-        # 敵キャラクターを描画（カメラ位置を考慮、重なり防止）
-        for i, enemy in enumerate(self.game_state.enemies):
-            # キャラクターの描画位置を計算
-            if enemy.current_city_id and not enemy.is_moving:
-                # 移動中でない場合のみ同じCity内での位置調整を行う
-                current_city = self.game_state.get_city_by_id(enemy.current_city_id)
-                if current_city and current_city in character_positions:
-                    city_characters = character_positions[current_city]
-                    char_index = next(
-                        (
-                            idx
-                            for idx, (char_type, char) in enumerate(city_characters)
-                            if char_type == "enemy" and char == enemy
-                        ),
-                        0,
-                    )
-
-                    # 複数キャラクターがいる場合は横に並べる
-                    offset_x = 0
-                    if len(city_characters) > 1:
-                        total_width = len(city_characters) * enemy.width
-                        start_x = -(total_width - enemy.width) // 2
-                        offset_x = start_x + char_index * enemy.width
-
-                    enemy_screen_x = enemy.x + offset_x - self.camera_x
-                else:
-                    enemy_screen_x = enemy.x - self.camera_x
-            else:
-                # 移動中または現在のCityがない場合はオフセットなし
-                enemy_screen_x = enemy.x - self.camera_x
-
-            enemy_screen_y = enemy.y - self.camera_y
-
-            # 敵が画面内にある場合のみ描画
-            if (
-                -enemy.width <= enemy_screen_x <= screen_width + enemy.width
-                and -enemy.height <= enemy_screen_y <= screen_height + enemy.height
-            ):
-                # 敵キャラクター（resources.pyxresのImage0、image_indexに基づく段を使用）
-                half_width = enemy.width // 2
-                half_height = enemy.height // 2
-
-                # アニメーションフレームを計算（2つのフレームを交互に表示）
-                anim_frame = (pyxel.frame_count // 10) % 2
-                src_x = anim_frame * 16  # 0または16
-                src_y = enemy.image_index * 16  # image_indexに基づいてY座標を計算
-
-                # 向いている方向に応じて描画幅を調整（右向きの場合は負の値で反転）
-                draw_width = enemy.width if not enemy.facing_right else -enemy.width
-
-                pyxel.blt(
-                    int(enemy_screen_x - half_width),
-                    int(enemy_screen_y - half_height),
-                    0,  # Image Bank 0
-                    src_x,  # ソース画像のX座標（0または16）
-                    src_y,  # ソース画像のY座標（image_indexに基づく）
-                    draw_width,  # 幅（負の値で左右反転）
-                    enemy.height,  # 高さ
-                    2,  # 透明色（紫色を透明にする）
-                )
-
-                # ライフゲージを表示
-                life_bar_width = enemy.width
-                life_bar_height = 3
-                life_bar_x = int(enemy_screen_x - half_width)
-                life_bar_y = int(enemy_screen_y - half_height - 8)
-
-                # ライフゲージの背景（赤色）
-                pyxel.rect(life_bar_x, life_bar_y, life_bar_width, life_bar_height, 8)
-
-                # ライフゲージの現在値（緑色）
-                current_life_width = int((enemy.life / enemy.max_life) * life_bar_width)
-                if current_life_width > 0:
-                    pyxel.rect(
-                        life_bar_x, life_bar_y, current_life_width, life_bar_height, 11
-                    )
-
-                # AI種別インジケーターを表示（敵の上に小さな色付きの円）
-                indicator_x = int(enemy_screen_x)
-                indicator_y = int(enemy_screen_y - half_height - 6)
-
-                if enemy.ai_type == "aggressive":
-                    pyxel.circ(indicator_x, indicator_y, 2, 8)  # 赤色
-                elif enemy.ai_type == "patrol":
-                    pyxel.circ(indicator_x, indicator_y, 2, 11)  # ライトブルー
-                elif enemy.ai_type == "defensive":
-                    pyxel.circ(indicator_x, indicator_y, 2, 3)  # 緑色
-                else:  # random
-                    pyxel.circ(indicator_x, indicator_y, 2, 14)  # ピンク
-
-                # AI思考中のインジケーター（エネミーターン時にAIタイマーが動いている間）
-                current_ai_enemy = None
-                if (
-                    self.game_state.current_ai_enemy_index is not None
-                    and 0
-                    <= self.game_state.current_ai_enemy_index
-                    < len(self.game_state.enemies)
-                ):
-                    current_ai_enemy = self.game_state.enemies[
-                        self.game_state.current_ai_enemy_index
-                    ]
-
-                if (
-                    self.game_state.current_turn == "enemy"
-                    and self.game_state.ai_timer > 0
-                    and enemy == current_ai_enemy
-                ):
-                    # 点滅する思考インジケーター
-                    if (pyxel.frame_count // 5) % 2 == 0:
-                        pyxel.circ(
-                            int(enemy_screen_x),
-                            int(enemy_screen_y - half_height - 12),
-                            3,
-                            7,
-                        )  # 白色の思考バブル
-
-                # 選択された敵に点滅する枠線を描画（エネミーターン時）
-                if (
-                    enemy == self.selected_enemy
-                    and self.game_state.current_turn == "enemy"
-                ):
-                    # EnemySelectionState中は特別な点滅効果
-                    from map_state_machine import MapStateType
-
-                    current_state_type = self.state_context.get_current_state_type()
-
-                    if current_state_type == MapStateType.ENEMY_SELECTION:
-                        # EnemySelectionState中の点滅（0.5秒で2回点滅）
-                        current_state = self.state_context.current_state
-                        if hasattr(current_state, "blink_timer") and hasattr(
-                            current_state, "blink_duration"
-                        ):
-                            # 点滅状態を計算（blink_duration=15フレーム毎に切り替え）
-                            blink_phase = (
-                                current_state.blink_timer % current_state.blink_duration
-                            )
-                            if blink_phase < current_state.blink_duration // 2:
-                                frame_color = 8  # 赤色で表示
-
-                                # 枠線を描画
-                                frame_x = int(enemy_screen_x - half_width - 2)
-                                frame_y = int(enemy_screen_y - half_height - 2)
-                                frame_w = enemy.width + 4
-                                frame_h = enemy.height + 4
-
-                                # 太い枠線で強調
-                                pyxel.rect(
-                                    frame_x, frame_y, frame_w, 2, frame_color
-                                )  # 上
-                                pyxel.rect(
-                                    frame_x,
-                                    frame_y + frame_h - 2,
-                                    frame_w,
-                                    2,
-                                    frame_color,
-                                )  # 下
-                                pyxel.rect(
-                                    frame_x, frame_y, 2, frame_h, frame_color
-                                )  # 左
-                                pyxel.rect(
-                                    frame_x + frame_w - 2,
-                                    frame_y,
-                                    2,
-                                    frame_h,
-                                    frame_color,
-                                )  # 右
-                    else:
-                        # 通常の点滅効果（30フレームで1回点滅）
-                        if (pyxel.frame_count // 10) % 3 != 0:
-                            frame_color = 8  # 赤色
-
-                            # 枠線を描画
-                            frame_x = int(enemy_screen_x - half_width - 1)
-                            frame_y = int(enemy_screen_y - half_height - 1)
-                            frame_w = enemy.width + 2
-                            frame_h = enemy.height + 2
-
-                            # 上下の線
-                            pyxel.rect(frame_x, frame_y, frame_w, 1, frame_color)
-                            pyxel.rect(
-                                frame_x, frame_y + frame_h - 1, frame_w, 1, frame_color
-                            )
-                            # 左右の線
-                            pyxel.rect(frame_x, frame_y, 1, frame_h, frame_color)
-                            pyxel.rect(
-                                frame_x + frame_w - 1, frame_y, 1, frame_h, frame_color
-                            )
-        # UI表示
+    def draw_ui(self):
+        """UI表示（ホバー情報、ゲーム終了オーバーレイ、デバッグ情報）"""
         # ホバー情報の表示（最優先で表示）
         mouse_x = pyxel.mouse_x
         mouse_y = pyxel.mouse_y
@@ -1188,7 +837,9 @@ class MapScene(Scene):
             pyxel.text(5, 35, "Click: Select character, Click connected City", 7)
 
             # ターン情報を表示
-            turn_text = f"Turn {self.game_state.turn_counter}: {self.game_state.current_turn.upper()} TURN"
+            turn_counter = self.game_state.turn_counter
+            turn_name = self.game_state.current_turn.upper()
+            turn_text = f"Turn {turn_counter}: {turn_name} TURN"
             turn_color = 11 if self.game_state.current_turn == "player" else 8
             pyxel.text(5, 45, turn_text, turn_color)
 
@@ -1215,10 +866,19 @@ class MapScene(Scene):
                     display_name = "None"
                 selected_text = f"Selected Player at {display_name}:"
                 pyxel.text(5, 65, selected_text, 11)
-                pos_text = f"  Position: ({int(self.selected_player.x)}, {int(self.selected_player.y)})"
+                pos_text = (
+                    f"  Position: ({int(self.selected_player.x)}, "
+                    f"{int(self.selected_player.y)})"
+                )
                 pyxel.text(5, 75, pos_text, 11)
                 # プレイヤーの戦闘ステータスを表示
-                status_text = f"  Life: {self.selected_player.life}/{self.selected_player.max_life}, Attack: {self.selected_player.attack}"
+                player_life = self.selected_player.life
+                player_max_life = self.selected_player.max_life
+                player_attack = self.selected_player.attack
+                status_text = (
+                    f"  Life: {player_life}/{player_max_life}, "
+                    f"Attack: {player_attack}"
+                )
                 pyxel.text(5, 85, status_text, 11)
             elif self.game_state.current_turn == "enemy" and self.selected_enemy:
                 current_city_id = (
@@ -1235,10 +895,19 @@ class MapScene(Scene):
                     display_name = "None"
                 selected_text = f"Selected Enemy at {display_name}:"
                 pyxel.text(5, 65, selected_text, 8)
-                pos_text = f"  Position: ({int(self.selected_enemy.x)}, {int(self.selected_enemy.y)})"
+                pos_text = (
+                    f"  Position: ({int(self.selected_enemy.x)}, "
+                    f"{int(self.selected_enemy.y)})"
+                )
                 pyxel.text(5, 75, pos_text, 8)
                 # 敵の戦闘ステータスを表示
-                status_text = f"  Life: {self.selected_enemy.life}/{self.selected_enemy.max_life}, Attack: {self.selected_enemy.attack}"
+                enemy_life = self.selected_enemy.life
+                enemy_max_life = self.selected_enemy.max_life
+                enemy_attack = self.selected_enemy.attack
+                status_text = (
+                    f"  Life: {enemy_life}/{enemy_max_life}, "
+                    f"Attack: {enemy_attack}"
+                )
                 pyxel.text(5, 85, status_text, 8)
             else:
                 pyxel.text(5, 65, "No character selected", 8)
@@ -1253,7 +922,11 @@ class MapScene(Scene):
 
             # カメラ追従情報を表示
             if self.camera_follow_target:
-                follow_info = f"Camera following: {self.camera_follow_target.ai_type if hasattr(self.camera_follow_target, 'ai_type') else 'Player'}"
+                if hasattr(self.camera_follow_target, 'ai_type'):
+                    target_type = self.camera_follow_target.ai_type
+                else:
+                    target_type = 'Player'
+                follow_info = f"Camera following: {target_type}"
                 pyxel.text(5, 35, follow_info, 13)
             else:
                 pyxel.text(5, 35, "Camera: Manual control", 6)
@@ -1283,10 +956,15 @@ class MapScene(Scene):
                 )
                 # 都市の表示名を取得
                 if player_city_id is not None:
-                    display_name = self.game_state.get_city_display_name(player_city_id)
+                    display_name = self.game_state.get_city_display_name(
+                        player_city_id
+                    )
                 else:
                     display_name = "None"
-                player_info = f"Player {i+1} at {display_name}: Life {player.life}/{player.max_life}"
+                player_info = (
+                    f"Player {i+1} at {display_name}: "
+                    f"Life {player.life}/{player.max_life}"
+                )
                 pyxel.text(5, y_pos, player_info, 11)
                 y_pos += 10
 
@@ -1298,10 +976,14 @@ class MapScene(Scene):
                 enemy_city_id = enemy.current_city_id if enemy.current_city_id else None
                 # 都市の表示名を取得
                 if enemy_city_id is not None:
-                    display_name = self.game_state.get_city_display_name(enemy_city_id)
+                    display_name = self.game_state.get_city_display_name(
+                        enemy_city_id
+                    )
                 else:
                     display_name = "None"
-                enemy_info = f"Enemy {i+1} ({enemy.ai_type}) at {display_name}:"
+                enemy_info = (
+                    f"Enemy {i+1} ({enemy.ai_type}) at {display_name}:"
+                )
                 pyxel.text(5, y_pos, enemy_info, 8)
                 y_pos += 10
                 life_info = f"  Life {enemy.life}/{enemy.max_life}"
@@ -1322,12 +1004,16 @@ class MapScene(Scene):
 
             # AI情報を表示（エネミーターン時）
             if self.game_state.current_turn == "enemy":
-                ai_info = f"AI Timer: {self.game_state.ai_timer}/{self.game_state.ai_decision_delay}"
+                ai_timer = self.game_state.ai_timer
+                ai_delay = self.game_state.ai_decision_delay
+                ai_info = f"AI Timer: {ai_timer}/{ai_delay}"
                 pyxel.text(5, legend_y - 20, ai_info, 8)
 
             # 戦闘処理状態を表示
             if self.is_processing_battles:
-                battle_info = f"Processing battles: {self.current_battle_index + 1}/{len(self.pending_battle_results)}"
+                current_battle = self.current_battle_index + 1
+                total_battles = len(self.pending_battle_results)
+                battle_info = f"Processing battles: {current_battle}/{total_battles}"
                 battle_y = (
                     legend_y - 30
                     if self.game_state.current_turn == "enemy"

@@ -139,10 +139,10 @@ class BattleScene(Scene):
         """メイン描画メソッド - 共通描画と状態固有描画を分離"""
         # 共通背景描画
         self.draw_background()
-        
+
         # 状態固有の描画を委譲（キャラクター描画を含む）
         self.draw_phase_content()
-        
+
         # 共通UI要素
         self.draw_damage_numbers()
         self.draw_progress_bar()
@@ -152,7 +152,7 @@ class BattleScene(Scene):
         """背景とエフェクト描画"""
         # 半透明の黒い背景
         pyxel.rect(0, 0, pyxel.width, pyxel.height, 0)
-        
+
         # フラッシュエフェクトを最初に描画（背景の上、他の要素の下）
         self.draw_flash_effects()
 
@@ -164,10 +164,10 @@ class BattleScene(Scene):
         city_text = f"BATTLE AT {self.city.name}"
         text_width = len(city_text) * 4
         pyxel.text(info_x - text_width // 2, info_y - 30, city_text, 7)
-        
+
         # 現在の状態に描画を委譲（キャラクター描画と固有コンテンツ）
         current_state = self.state_context.current_state
-        if hasattr(current_state, 'draw_phase'):
+        if hasattr(current_state, "draw_phase"):
             current_state.draw_phase()
         # フォールバック削除 - 全ての状態にdraw_phase()を実装済み
 

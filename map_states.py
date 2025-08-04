@@ -364,9 +364,9 @@ class BattleSequenceState(MapGameState):
 
     def start_next_battle(self):
         """次の戦闘を開始"""
-        print(
-            f"Starting battle {self.current_battle_index + 1}/{len(self.battle_locations)}"
-        )
+        current_num = self.current_battle_index + 1
+        total_battles = len(self.battle_locations)
+        print(f"Starting battle {current_num}/{total_battles}")
         if self.current_battle_index < len(self.battle_locations):
             current_battle = self.battle_locations[self.current_battle_index]
             city_id = current_battle["city_id"]
@@ -529,7 +529,7 @@ class CityDiscoveryState(MapGameState):
         # テキストを表示
         title_text = "NEW CITY DISCOVERED!"
         city_text = f"Name: {new_city.name}"
-        
+
         # 接続情報を作成
         if len(connected_cities) >= 2:
             connection_text1 = f"Connected to: {connected_cities[0].name}"
@@ -540,14 +540,18 @@ class CityDiscoveryState(MapGameState):
         else:
             connection_text1 = "Connected to unknown cities"
             connection_text2 = ""
-        
+
         skip_text = "Press SPACE to continue"
 
         # テキストを中央揃えで表示
         title_x = box_x + (box_width - len(title_text) * 4) // 2
         city_x = box_x + (box_width - len(city_text) * 4) // 2
         connection1_x = box_x + (box_width - len(connection_text1) * 4) // 2
-        connection2_x = box_x + (box_width - len(connection_text2) * 4) // 2 if connection_text2 else 0
+        connection2_x = (
+            box_x + (box_width - len(connection_text2) * 4) // 2
+            if connection_text2
+            else 0
+        )
         skip_x = box_x + (box_width - len(skip_text) * 4) // 2
 
         pyxel.text(title_x, box_y + 10, title_text, 11)
@@ -555,7 +559,7 @@ class CityDiscoveryState(MapGameState):
         pyxel.text(connection1_x, box_y + 35, connection_text1, 7)
         if connection_text2:
             pyxel.text(connection2_x, box_y + 45, connection_text2, 7)
-        
+
         # 敵情報を表示（存在する場合）
         if new_enemy:
             enemy_text = f"Enemy ({new_enemy.ai_type}) appeared!"

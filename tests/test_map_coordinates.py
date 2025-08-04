@@ -274,12 +274,14 @@ class TestCoordinateTransformerEdgeCases(unittest.TestCase):
             self.assertEqual(
                 tile_x,
                 expected_tile_x,
-                f"ピクセル({pixel_x}, {pixel_y})のタイルX変換エラー: 期待値{expected_tile_x}, 実際値{tile_x}",
+                f"ピクセル({pixel_x}, {pixel_y})のタイルX変換エラー: "
+                f"期待値{expected_tile_x}, 実際値{tile_x}",
             )
             self.assertEqual(
                 tile_y,
                 expected_tile_y,
-                f"ピクセル({pixel_x}, {pixel_y})のタイルY変換エラー: 期待値{expected_tile_y}, 実際値{tile_y}",
+                f"ピクセル({pixel_x}, {pixel_y})のタイルY変換エラー: "
+                f"期待値{expected_tile_y}, 実際値{tile_y}",
             )
 
 

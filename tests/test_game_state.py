@@ -2,7 +2,6 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 
 # テストファイルからプロジェクトルートのモジュールをインポートできるようにする
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -331,7 +330,7 @@ class TestGameState(unittest.TestCase):
         self.assertIn("new_city", discovery_info)
         self.assertIn("connected_cities", discovery_info)
         self.assertIn("tile_position", discovery_info)
-        
+
         # 2つの都市に接続されることを確認
         self.assertEqual(len(discovery_info["connected_cities"]), 2)
 
@@ -342,10 +341,6 @@ class TestGameState(unittest.TestCase):
         self.assertEqual(len(self.game_state.roads), initial_roads_count + 2)
 
         # 新都市が適切な接続を持っているかチェック
-        from coordinate_utils import create_default_coordinate_transformer
-
-        coord_transformer = create_default_coordinate_transformer()
-
         new_city = discovery_info["new_city"]
         connected_cities = discovery_info["connected_cities"]
 
@@ -354,9 +349,9 @@ class TestGameState(unittest.TestCase):
         mid_y = (connected_cities[0].y + connected_cities[1].y) / 2
 
         # 新都市が中点から妥当な距離にあることをチェック
-        distance = ((new_city.x - mid_x)**2 + (new_city.y - mid_y)**2)**0.5
+        distance = ((new_city.x - mid_x) ** 2 + (new_city.y - mid_y) ** 2) ** 0.5
         max_distance = 4.0 * 16  # 4タイル * 16ピクセル（少し余裕を持たせる）
-        
+
         self.assertLessEqual(
             distance,
             max_distance,
@@ -729,26 +724,26 @@ class TestEnemyGeneration(unittest.TestCase):
         """道路の中点付近に新都市が配置されることをテスト"""
         initial_city_count = len(self.game_state.cities)
         initial_road_count = len(self.game_state.roads)
-        
+
         # 都市発見を実行
         discovery_info = self.game_state.discover_new_city()
-        
+
         if discovery_info:  # 候補位置がある場合のみテスト
             # 新都市が追加されたことを確認
             self.assertEqual(len(self.game_state.cities), initial_city_count + 1)
-            
+
             # 2本の新しい道路が追加されたことを確認
             self.assertEqual(len(self.game_state.roads), initial_road_count + 2)
-            
+
             # 返り値の構造を確認
             self.assertIn("new_city", discovery_info)
             self.assertIn("connected_cities", discovery_info)
             self.assertEqual(len(discovery_info["connected_cities"]), 2)
-            
+
             # 新都市が2つの既存都市に接続されていることを確認
             new_city = discovery_info["new_city"]
             connected_cities = discovery_info["connected_cities"]
-            
+
             # 新都市から各接続都市への道路が存在することを確認
             for connected_city in connected_cities:
                 self.assertTrue(
@@ -757,29 +752,24 @@ class TestEnemyGeneration(unittest.TestCase):
 
     def test_midpoint_city_positioning(self):
         """新都市が既存道路の中点付近に配置されることをテスト"""
-        from coordinate_utils import create_default_coordinate_transformer
-        
-        coord_transformer = create_default_coordinate_transformer()
-        
         # 複数回実行して中点配置を確認
         for _ in range(5):
             game_state = GameState()
             game_state.initialize_default_state()
-            
-            # 元の道路の中点を計算
-            original_roads = game_state.roads.copy()
-            
+
             discovery_info = game_state.discover_new_city()
             if discovery_info:
                 new_city = discovery_info["new_city"]
                 connected_cities = discovery_info["connected_cities"]
-                
+
                 # 接続された2都市の中点を計算
                 mid_x = (connected_cities[0].x + connected_cities[1].x) / 2
                 mid_y = (connected_cities[0].y + connected_cities[1].y) / 2
-                
+
                 # 新都市が中点から適度に近い範囲にあることを確認（±3タイル程度）
-                distance = ((new_city.x - mid_x)**2 + (new_city.y - mid_y)**2)**0.5
+                distance = (
+                    (new_city.x - mid_x) ** 2 + (new_city.y - mid_y) ** 2
+                ) ** 0.5
                 max_distance = 3.0 * 16  # 3タイル * 16ピクセル
                 self.assertLessEqual(distance, max_distance)
                 break
@@ -832,9 +822,6 @@ class TestEnemyGeneration(unittest.TestCase):
 
     def test_enemy_image_index_rotation(self):
         """敵の画像インデックスがローテーションされることをテスト"""
-        # 初期状態で1体の敵がいることを確認
-        initial_enemy_count = len(self.game_state.enemies)
-
         # 複数の都市を発見して画像インデックスの変化を確認
         image_indices = []
         for i in range(3):  # 3回発見を試行

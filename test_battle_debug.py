@@ -47,7 +47,8 @@ def test_battle_initiative():
     for i, char in enumerate(all_characters):
         char_type = "Player" if char in players else f"Enemy({char.ai_type})"
         print(
-            f"  {i+1}. {char_type} - Initiative: {char.initiative}, Life: {char.life}, Attack: {char.attack}"
+            f"  {i+1}. {char_type} - Initiative: {char.initiative}, "
+            f"Life: {char.life}, Attack: {char.attack}"
         )
 
     # イニシアチブ順をソート
