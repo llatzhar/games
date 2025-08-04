@@ -505,7 +505,7 @@ class CityDiscoveryState(MapGameState):
 
             # 表示時間が終了したらプレイヤーターンのカットインへ
             if self.display_timer >= self.display_duration:
-                self._apply_discovery_and_transition()
+                self._transition_to_player_turn()
 
         return self.context
 
@@ -513,14 +513,10 @@ class CityDiscoveryState(MapGameState):
         # SPACEキーまたはマウスクリックでスキップ可能
         if pyxel.btnp(pyxel.KEY_SPACE) or pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
             if self.discovery_info:
-                self._apply_discovery_and_transition()
+                self._transition_to_player_turn()
 
-    def _apply_discovery_and_transition(self):
-        """都市発見計画を適用してプレイヤーターンに遷移"""
-        if hasattr(self, 'discovery_plan') and self.discovery_plan:
-            # 都市発見計画をGameStateに適用
-            self.context.game_state.apply_city_discovery(self.discovery_plan)
-
+    def _transition_to_player_turn(self):
+        """プレイヤーターンに遷移（都市発見の適用はexit()で実行）"""
         self.transition_to(CutinState(self.context, "PLAYER TURN", "player"))
 
     def draw_phase(self, map_scene):
@@ -642,7 +638,12 @@ class CityDiscoveryState(MapGameState):
             pyxel.text(skip_x, box_y + 50, skip_text, 6)
 
     def exit(self):
-        pass
+        """状態終了時のクリーンアップ処理"""
+        # 都市発見計画があれば適用
+        if hasattr(self, 'discovery_plan') and self.discovery_plan:
+            # 都市発見計画をGameStateに適用
+            self.context.game_state.apply_city_discovery(self.discovery_plan)
+            self.discovery_plan = None  # 適用後はクリア
 
 
 class GameOverState(MapGameState):

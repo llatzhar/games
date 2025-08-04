@@ -628,6 +628,10 @@ class MapScene(Scene):
 
         # シーン遷移チェック
         if self.next_scene:
+            # シーン遷移時も現在の状態のexit()を確実に呼び出す
+            if self.state_context.current_state:
+                self.state_context.current_state.exit()
+
             next_scene = self.next_scene
             self.next_scene = None  # リセット
             return next_scene
