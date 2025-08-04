@@ -2,9 +2,7 @@ import random
 
 import pyxel
 
-# from battle import BattleSubScene  # 不要 - BattleSceneを使用
 from coordinate_utils import create_default_coordinate_transformer
-from cutin import CutinSubScene
 
 # game.pyから定数をインポート
 from game import Scene, screen_height, screen_width
@@ -348,57 +346,6 @@ class MapScene(Scene):
         # デフォルトはランダム移動
         return random.choice(connected_cities)
 
-    def execute_enemy_ai_turn(self):
-        """敵のAIターンを実行"""
-        if (
-            self.game_state.current_turn != "enemy"
-            or self.game_state.enemy_moved_this_turn
-        ):
-            return
-
-        # まだ移動していない敵を選択
-        available_enemies = [
-            enemy for enemy in self.game_state.enemies if not enemy.is_moving
-        ]
-        if not available_enemies:
-            return
-
-        # ランダムに敵を選択
-        selected_enemy = random.choice(available_enemies)
-        selected_enemy_index = self.game_state.enemies.index(selected_enemy)
-        self.game_state.current_ai_enemy_index = (
-            selected_enemy_index  # 現在AI処理中の敵を記録
-        )
-
-        # 敵を選択時にカメラ追従を設定
-        self.set_camera_follow_target(selected_enemy)
-
-        # AIに基づいて移動先を決定
-        target_city = self.decide_enemy_action(selected_enemy)
-
-        if target_city:
-            target_city_id = target_city.id
-            if self.game_state.are_cities_connected(
-                selected_enemy.current_city_id, target_city_id
-            ):
-                # 移動実行
-                selected_enemy.target_x = target_city.x
-                selected_enemy.target_y = target_city.y
-                selected_enemy.target_city_id = target_city_id  # 内部IDを設定
-                selected_enemy.is_moving = True
-                self.game_state.enemy_moved_this_turn = True
-
-            # パトロールAIの場合はインデックスを更新
-            if (
-                selected_enemy.ai_type == "patrol"
-                and target_city_id in selected_enemy.patrol_city_ids
-            ):
-                selected_enemy.patrol_index = selected_enemy.patrol_city_ids.index(
-                    target_city_id
-                )
-
-        self.game_state.current_ai_enemy_index = None  # AI処理完了
-
     def get_character_positions_by_city(self):
         """各Cityにいるキャラクターを収集して辞書で返す"""
         character_positions = {}
@@ -599,45 +546,6 @@ class MapScene(Scene):
         print("SubScene finished:", finished_sub_scene)
         # 古い戦闘処理は無効化 - 新しいBattleSceneを使用
         pass
-
-    def switch_turn(self):
-        """ターンを切り替える"""
-        # ターン終了時に戦闘をチェック（実際の戦闘は実行しない）
-        battle_locations = self.game_state.check_battles()
-
-        # ターン状態を更新
-        if self.game_state.current_turn == "player":
-            self.game_state.current_turn = "enemy"
-            self.game_state.player_moved_this_turn = False
-            self.selected_player = None  # プレイヤー選択を解除
-            self.game_state.ai_timer = 0  # AIタイマーをリセット
-            # プレイヤーターンからエネミーターンに切り替わる際はカメラ追従をクリア
-            self.clear_camera_follow()
-        else:
-            self.game_state.current_turn = "player"
-            self.game_state.enemy_moved_this_turn = False
-            self.selected_enemy = None  # 敵選択を解除
-            self.game_state.turn_counter += (
-                1  # プレイヤーターンの開始で新しいターン番号
-            )
-            self.game_state.ai_timer = 0  # AIタイマーをリセット
-            # エネミーターンからプレイヤーターンに切り替わる際はカメラ追従をクリア
-            self.clear_camera_follow()
-
-        # 戦闘がある場合は戦闘シーケンスを開始
-        if battle_locations:
-            self.start_battle_sequence(battle_locations)
-        else:
-            # 戦闘がない場合は通常のターン切り替えカットイン
-            if self.game_state.current_turn == "player":
-                cutin_text = "PLAYER TURN"
-            else:
-                cutin_text = "ENEMY TURN"
-
-            self.set_sub_scene(CutinSubScene(self, cutin_text))
-
-        # ターン切り替え時に自動セーブ
-        self.game_state.auto_save()
 
     def can_move_this_turn(self):
         """このターンで移動可能かチェック"""
