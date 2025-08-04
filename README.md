@@ -94,18 +94,53 @@ Pyxelライブラリを使用したターンベース戦略ゲームです。プ
 - **アーキテクチャ**: オブジェクト指向設計（Sceneパターン）
 
 ### ファイル構成
-- `game.py`: メインゲームエンジンとシーン管理
-- `map.py`: マップシーン、キャラクタークラス、AI実装
+- `game.py`: メインゲームエンジンとシーン管理、コマンドライン引数処理
+- `map.py`: マップシーン、キャラクタークラス、AI実装、状態マシン統合
+- `map_states.py`: マップゲーム状態実装（PlayerTurnState、EnemyTurnState等）
+- `map_state_machine.py`: 状態マシン基底クラスとゲーム状態管理
+- `battle.py`: 独立戦闘シーン、状態マシンベース戦闘管理
+- `battle_states.py`: 戦闘状態実装（BattleIntroState、BattleIndividualAttackState等）
+- `game_state.py`: ゲームデータモデル（City、Road、Player、Enemy）、JSON保存/読込
+- `cutin.py`: ターン切り替え演出シーン
+- `hover_info.py`: UI情報表示システム
+- `coordinate_utils.py`: 座標変換ユーティリティ
+- `resource_manager.py`: リソース管理システム
 - `resources.pyxres`: スプライトリソース
-- `README.md`: プロジェクトドキュメント
+
+### コマンドライン機能
+```bash
+# 通常起動
+python game.py
+
+# 新規ゲーム開始（セーブデータ削除）
+python game.py --new-game
+python game.py --reset
+```
 
 ### クラス設計
-- `Character`: キャラクターの基底クラス
-- `Player`: プレイヤーキャラクター（速度: 2）
-- `Enemy`: 敵キャラクター（速度: 1、AI搭載）
-- `City`: 都市オブジェクト
-- `Road`: 都市間接続
-- `MapScene`: メインゲームシーン
+
+#### キャラクター階層
+- `Character`: キャラクターの基底クラス（共通プロパティとメソッド）
+- `Player`: プレイヤーキャラクター（速度: 2、イニシアチブ: 15）
+- `Enemy`: 敵キャラクター（速度: 1、AI搭載、イニシアチブ: AI依存）
+
+#### ゲーム状態管理
+- `GameState`: ゲーム全体の状態管理（都市、道路、キャラクター、セーブ/ロード）
+- `City`: 都市オブジェクト（位置、接続関係）
+- `Road`: 都市間接続（双方向リンク）
+
+#### シーン管理
+- `Scene`: シーンの基底クラス
+- `MapScene`: メインゲームシーン（State Machine統合）
+- `BattleScene`: 戦闘専用シーン（独立実装）
+- `CutinSubScene`: ターン切り替え演出
+
+#### 状態マシン
+- `StateContext`: 状態遷移管理の基底クラス
+- `MapGameState`: マップ用状態の基底クラス
+- `BattleGameState`: 戦闘用状態の基底クラス
+- **マップ状態**: `PlayerTurnState`, `EnemyTurnState`, `TransitionState`, `BattleSequenceState`, `CutinState`
+- **戦闘状態**: `BattleIntroState`, `BattleIndividualAttackState`, `BattleResultsState`, `BattleOutroState`
 
 ## map.py モジュール仕様
 
@@ -250,153 +285,190 @@ Pyxelライブラリを使用したターンベース戦略ゲームです。プ
 - **ユーザビリティ**: 直感的な操作と視覚フィードバック
 - **保守性**: モジュール間の疎結合と明確なインターフェース
 
-## battle.py モジュール仕様
+## 戦闘システム仕様
 
 ### 概要
-`battle.py`は戦闘シーケンスを視覚的に表現するモジュールで、`BattleSubScene`クラスによって戦闘の演出と結果表示を担当します。状態マシンパターンを使用して、戦闘フェーズの管理を行います。
+戦闘システムは独立した`BattleScene`として実装されており、State Machineパターンを使用した詳細な戦闘アニメーションと演出を提供します。同一都市に敵味方が存在する場合に自動的に発生し、イニシアチブベースの個別攻撃システムで進行します。
 
-### 主要クラス: BattleSubScene
+### アーキテクチャ
 
-#### アーキテクチャ
-- **状態マシンベース**: `map.py`と同じ状態マシン基底クラス(`StateContext`, `BattleGameState`)を使用
-- **フェーズ分離**: 各戦闘段階を独立した状態クラスで管理
-- **共通基盤**: `map_state_machine.py`の基底クラスを拡張して戦闘専用状態を実装
+#### 戦闘シーン (`battle.py`)
+- **独立シーン**: `BattleScene`クラスとして実装（`SubScene`から独立シーンに変更）
+- **状態マシンベース**: `map_state_machine.py`の基底クラスを使用
+- **GameState共有**: `map.py`と同じ`GameState`インスタンスを共有してデータ一貫性を保持
+- **描画分離**: 各状態が`draw_phase()`メソッドで独自の描画を担当
 
-#### 基本機能と責任
-1. **戦闘演出管理**
-   - 状態マシンによるフェーズベースの戦闘進行制御
-   - イニシアチブベースの個別攻撃シーケンス
-   - アニメーション効果とタイミング管理
-   - 戦闘参加キャラクターの視覚表現
-   - ダメージ表示とエフェクト演出
+#### 状態管理システム (`battle_states.py`)
+- **状態分離**: 各戦闘フェーズを独立した状態クラスで管理
+- **共通基底クラス**: `BattleGameState`を継承
+- **描画委譲**: `BattleScene.draw()`が各状態の`draw_phase()`を呼び出し
 
-2. **戦闘計算実行**
-   - 戦闘開始時の参加キャラクター状態保存
-   - イニシアチブ順による攻撃順序決定
-   - 実際の戦闘ロジック実行（`execute_battle()`）
-   - 戦闘ログの生成と解析
-   - キャラクターライフの更新
+### 戦闘の発生と進行
 
-3. **ユーザーインターフェース**
-   - 戦闘情報の表示（都市名、フェーズ、ダメージ）
-   - プログレスバーによる進行状況表示
-   - 早期終了オプション（ESC/SPACE）
-   - ライフゲージとキャラクター情報
+#### 戦闘開始条件
+1. **同一都市判定**: ターン終了時に同じ都市にプレイヤーと敵が存在
+2. **戦闘シーン遷移**: `map.py`から`battle.py`へのシーン切り替え
+3. **参加者決定**: 同一都市内の全キャラクターが戦闘に参加
 
-#### 状態マシンシステム
-
-##### 戦闘状態の定義
-```python
-class BattleStateType(Enum):
-    INTRO = "intro"
-    INDIVIDUAL_ATTACK = "individual_attack"  # 個別攻撃フェーズ
-    RESULTS = "results"
-    OUTRO = "outro"
-```
-
-##### イニシアチブシステム
-
-**イニシアチブ値の設定**
-- **プレイヤー**: 15（高い機動力）
-- **Aggressive AI**: 12（積極的で素早い）
+#### イニシアチブシステム
+**イニシアチブ値設定**
+- **プレイヤー**: 15（高機動力）
+- **Aggressive AI**: 12（攻撃的で素早い）
 - **Patrol AI**: 10（標準）
 - **Random AI**: 10（標準）
 - **Defensive AI**: 8（慎重で遅い）
 
 **攻撃順序決定**
 ```python
-# 全キャラクターをイニシアチブ順にソート
-all_characters = self.battle_players + self.battle_enemies
-sorted_characters = sorted(all_characters, key=lambda c: c.initiative, reverse=True)
+# 全キャラクターをイニシアチブ順にソート（降順）
+initiative_order = sorted(all_characters, 
+                         key=lambda c: c.initiative, reverse=True)
 ```
 
-**個別攻撃処理**
-- 各キャラクターが個別に攻撃を実行
-- 攻撃対象は最もライフの少ない敵/味方を自動選択
-- イニシアチブ値が表示され、戦術的な理解を促進
+### 戦闘状態と演出
 
-##### 戦闘状態クラス (`battle_states.py`)
+#### 戦闘状態定義 (`BattleStateType`)
+```python
+class BattleStateType(Enum):
+    INTRO = "intro"                    # 戦闘開始演出
+    INDIVIDUAL_ATTACK = "individual_attack"  # 個別攻撃フェーズ
+    RESULTS = "results"                # 戦闘結果表示
+    OUTRO = "outro"                    # 戦闘終了演出
+```
+
+#### キャラクター配置と向き
+- **プレイヤー**: 画面左側配置、右向き（`facing_right=True`）
+- **敵**: 画面右側配置、左向き（`facing_right=False`）
+- **対戦構図**: プレイヤーと敵が向き合う自然な配置
+
+#### 個別攻撃アニメーション
+**放物線移動システム**
+- **3フェーズアニメーション**: 接近（20フレーム）→ 攻撃（10フレーム）→ 帰還（20フレーム）
+- **放物線軌道**: Y軸方向に弧を描く自然な移動
+- **アニメーション計算**:
+```python
+# 放物線の計算式
+arc_progress = 4 * progress * (1 - progress)  # 0-1-0の放物線
+current_y = start_y + (target_y - start_y) * progress - arc_height * arc_progress
+```
+
+**キャラクター描画制御**
+- **重複回避**: 攻撃中のキャラクターは元位置では描画しない
+- **アニメーション位置**: 攻撃者は計算された位置で描画
+- **情報追従**: 名前・ライフ表示がアニメーション位置に追従
+
+#### 戦闘状態クラスの詳細
 
 1. **BattleIntroState（戦闘開始状態）**
    - **継続時間**: 2秒（60フレーム）
-   - **責任**: 戦闘開始の告知、イニシアチブ順計算
-   - **表示**: イニシアチブ順序の表示
+   - **表示内容**: "Battle Start!" メッセージ
+   - **イニシアチブ表示**: 攻撃順序の一覧表示
+   - **早期終了**: ESC/SPACE キーで戦闘スキップ
    - **遷移先**: `BattleIndividualAttackState`
 
 2. **BattleIndividualAttackState（個別攻撃状態）**
-   - **継続時間**: 2秒（60フレーム）×攻撃者数
-   - **責任**: 個別キャラクターの攻撃演出
-   - **表示**: 攻撃者名、イニシアチブ値、ダメージ
-   - **視覚効果**: 攻撃者に応じた色のフラッシュ
-   - **遷移**: 全攻撃完了まで自身をループ、完了後`BattleResultsState`
+   - **継続時間**: 50フレーム（約1.7秒）×攻撃者数
+   - **アニメーション**: 3フェーズ放物線移動
+     - 接近フェーズ（0-20フレーム）: 放物線軌道で敵に接近
+     - 攻撃フェーズ（20-30フレーム）: 攻撃位置で静止
+     - 帰還フェーズ（30-50フレーム）: 直線で元位置に帰還
+   - **戦闘計算**: `context.execute_attack()`で実際のダメージ計算
+   - **表示更新**: ライフ値のリアルタイム更新
+   - **遷移制御**: 全攻撃者完了まで自身をループ
 
 3. **BattleResultsState（結果表示状態）**
    - **継続時間**: 3秒（90フレーム）
-   - **責任**: 戦闘結果の表示、兵力情報表示
+   - **表示内容**: "Battle Results" とダメージサマリー
+   - **戦闘ログ**: 最大5件のダメージ記録表示
    - **遷移先**: `BattleOutroState`
 
 4. **BattleOutroState（戦闘終了状態）**
    - **継続時間**: 1秒（30フレーム）
-   - **責任**: 戦闘終了処理、フェードアウト
-   - **遷移先**: サブシーン終了（`None`）
+   - **表示内容**: "Battle Complete!" メッセージ
+   - **フェードアウト**: 時間経過による色の変化演出
+   - **シーン終了**: `return None`でマップシーンに復帰
 
-##### 状態遷移フロー
+### 戦闘ロジックと計算
+
+#### 攻撃計算システム
 ```python
-# イニシアチブベース戦闘フェーズ遷移
-BattleIntroState → BattleIndividualAttackState → (各キャラクター攻撃ループ) → BattleResultsState → BattleOutroState → 終了
+def execute_attack(self):
+    """現在の攻撃者による攻撃実行"""
+    attacker = self.current_attacker
+    
+    # 攻撃対象の決定（最もライフの少ない敵を選択）
+    if attacker in self.battle_players:
+        targets = [e for e in self.battle_enemies if e.life > 0]
+    else:
+        targets = [p for p in self.battle_players if p.life > 0]
+    
+    target = min(targets, key=lambda c: c.life)
+    
+    # ダメージ計算と適用
+    damage = self.game_state.calculate_battle_damage(attacker, target)
+    target.life = max(0, target.life - damage)
 ```
 
-##### 早期終了システム
+#### ダメージ計算
+- **基本ダメージ**: キャラクターの攻撃力に基づく
+- **ランダム要素**: 戦術的な不確実性を追加
+- **ライフ管理**: 0以下になった場合の処理
+
+#### 戦闘結果の反映
+- **リアルタイム更新**: 攻撃のたびにライフ値が更新
+- **視覚的フィードバック**: ダメージ表示とライフバーの変化
+- **GameState同期**: 戦闘結果が即座にゲーム状態に反映
+
+### 技術実装詳細
+
+#### State Machine基底クラス活用
 ```python
-# 全状態で共通の早期終了処理
-def handle_input(self):
-    if pyxel.btnp(pyxel.KEY_ESCAPE) or pyxel.btnp(pyxel.KEY_SPACE):
-        self.context.early_exit = True
+class BattleGameState(GameState):
+    """戦闘専用の状態基底クラス"""
+    
+    def draw_battle_characters(self):
+        """共通のキャラクター描画処理"""
+        
+    def draw_character(self, character, x, y, facing_right, initial_life, char_type):
+        """個別キャラクター描画（向き制御含む）"""
 ```
 
-#### 状態管理システム
-
-##### フェーズベースの戦闘進行
-戦闘は5つの明確なフェーズで管理されます：
-
+#### キャラクター向き制御
 ```python
-# フェーズ遷移フロー
-"intro" → "player_attack" → "enemy_attack" → "results" → "outro"
+# 描画幅による向き制御
+draw_width = -character.width if facing_right else character.width
+pyxel.blt(x, y, character.sprite_bank, character.sprite_x, character.sprite_y, 
+          draw_width, character.height, character.transparent_color)
 ```
 
-1. **Introフェーズ（2秒）**
-   - **目的**: 戦闘開始の告知と準備
-   - **表示内容**: "Battle begins!" メッセージ
-   - **キャラクター状態**: 戦闘前のライフ値を表示
-   - **遷移条件**: 60フレーム（2秒）経過後
+#### アニメーション位置計算
+```python
+def get_attacker_animated_position(self):
+    """放物線アニメーションによる攻撃者位置計算"""
+    # 時間ベースの進行度計算
+    progress = elapsed / phase_duration
+    
+    # 放物線軌道の計算
+    arc_progress = 4 * progress * (1 - progress)
+    animated_y = start_y + (target_y - start_y) * progress - arc_height * arc_progress
+```
 
-2. **Player Attackフェーズ（2秒）**
-   - **目的**: プレイヤー軍の攻撃演出
-   - **表示内容**: 攻撃ダメージまたはミス表示
-   - **視覚効果**: 青色フラッシュエフェクト
-   - **キャラクターアニメーション**: 攻撃時の前進モーション
-   - **ダメージ表示**: 敵側にダメージ数値を表示
-   - **遷移条件**: 60フレーム経過後
+### 戦闘システムの特徴
 
-3. **Enemy Attackフェーズ（2秒）**
-   - **目的**: 敵軍の攻撃演出
-   - **表示内容**: 攻撃ダメージまたはミス表示
-   - **視覚効果**: 赤色フラッシュエフェクト
-   - **キャラクターアニメーション**: 攻撃時の前進モーション
-   - **ダメージ表示**: プレイヤー側にダメージ数値を表示
-   - **遷移条件**: 60フレーム経過後
+#### ゲームプレイ統合
+- **ターンベース連携**: マップでの移動戦略と戦闘戦術の統合
+- **AI戦闘参加**: 各AIタイプが戦闘でも個性を発揮
+- **戦略的深度**: イニシアチブ値による戦術的選択肢
 
-4. **Resultsフェーズ（3秒）**
-   - **目的**: 戦闘結果の表示と確認
-   - **表示内容**: "Battle concluded" と兵力情報
-   - **キャラクター状態**: 最終的なライフ値を表示
-   - **遷移条件**: 90フレーム（3秒）経過後
+#### 視覚的演出
+- **没入感**: スムーズなアニメーションと効果音
+- **情報提示**: クリアなUI表示と進行状況
+- **操作性**: 直感的な早期終了オプション
 
-5. **Outroフェーズ（1秒）**
-   - **目的**: 戦闘終了とサブシーン終了準備
-   - **表示内容**: 継続指示メッセージ
-   - **フェードアウト効果**: 徐々に画面を暗転
-   - **遷移条件**: 30フレーム（1秒）経過後またはキー入力
+#### 拡張性
+- **新状態追加**: 状態マシンによる容易なフェーズ追加
+- **アニメーション変更**: 独立したアニメーション計算
+- **戦闘ルール拡張**: 計算ロジックの独立性
 
 #### タイマー管理システム
 
