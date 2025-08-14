@@ -97,7 +97,7 @@ class TestPlayer(unittest.TestCase):
         """プレイヤーのホバー情報テスト"""
         player = Player(50.0, 60.0, 1)
         info = player.get_hover_info()
-        self.assertIn("Player", info)
+        self.assertIn("Player:", info[0])  # 最初の行にPlayer:が含まれる
         self.assertIn("Location: 1", info)
         self.assertIn("Life: 120/120", info)
         self.assertIn("Attack: 25", info)
@@ -157,7 +157,8 @@ class TestEnemy(unittest.TestCase):
         """敵のホバー情報テスト"""
         enemy = Enemy(30.0, 40.0, 2, "aggressive", 1)
         info = enemy.get_hover_info()
-        self.assertIn("Enemy (aggressive)", info)
+        self.assertIn("Enemy:", info[0])  # 最初の行にEnemy:が含まれる
+        self.assertIn("(aggressive)", info[0])  # 最初の行にAIタイプが含まれる
         self.assertIn("Pursues players", info)
         self.assertIn("Initiative: 12", info)
 

@@ -9,6 +9,82 @@ from geometry_utils import point_too_close_to_line, roads_intersect
 # 都市発見の設定
 CITY_DISCOVERY_INTERVAL = 1  # nターンごとに新都市発見（n=1で毎ターン）
 
+# 都市とキャラクターの名前組み合わせ辞書
+CITY_CHARACTER_NAMES = {
+    "Central": {
+        "players": ["Arthur", "Elena", "Marcus", "Sophia"],
+        "enemies": ["Shadow", "Raven", "Viper", "Frost"]
+    },
+    "West": {
+        "players": ["Gareth", "Luna", "Victor", "Rose"],
+        "enemies": ["Iron", "Storm", "Blade", "Mist"]
+    },
+    "East": {
+        "players": ["Kai", "Nova", "Rex", "Pearl"],
+        "enemies": ["Fang", "Ghost", "Thorn", "Ash"]
+    },
+    "Forest": {
+        "players": ["Robin", "Sage", "Cedar", "Ivy"],
+        "enemies": ["Wolf", "Bear", "Hawk", "Fox"]
+    },
+    "Mountain": {
+        "players": ["Stone", "Peak", "Ridge", "Crystal"],
+        "enemies": ["Golem", "Titan", "Boulder", "Cliff"]
+    },
+    "Valley": {
+        "players": ["River", "Brook", "Dale", "Meadow"],
+        "enemies": ["Serpent", "Basilisk", "Venom", "Coil"]
+    },
+    "Plains": {
+        "players": ["Swift", "Gale", "Field", "Grass"],
+        "enemies": ["Nomad", "Rider", "Wind", "Dust"]
+    },
+    "Harbor": {
+        "players": ["Wave", "Tide", "Marina", "Coral"],
+        "enemies": ["Kraken", "Shark", "Reef", "Storm"]
+    },
+    "Desert": {
+        "players": ["Dune", "Oasis", "Sand", "Mirage"],
+        "enemies": ["Scorpion", "Viper", "Jackal", "Vulture"]
+    },
+    "Hill": {
+        "players": ["Slope", "Crest", "Mound", "Knoll"],
+        "enemies": ["Troll", "Ogre", "Giant", "Brute"]
+    },
+    "Lake": {
+        "players": ["Azure", "Deep", "Clear", "Pure"],
+        "enemies": ["Leviathan", "Hydra", "Depths", "Current"]
+    },
+    "River": {
+        "players": ["Flow", "Current", "Stream", "Rapids"],
+        "enemies": ["Pike", "Eel", "Catfish", "Trout"]
+    },
+    "Bridge": {
+        "players": ["Span", "Arch", "Cross", "Link"],
+        "enemies": ["Guardian", "Keeper", "Warden", "Sentry"]
+    },
+    "Canyon": {
+        "players": ["Echo", "Gorge", "Cliff", "Ravine"],
+        "enemies": ["Stalker", "Lurker", "Hunter", "Predator"]
+    },
+    "Gateway": {
+        "players": ["Portal", "Pass", "Entry", "Door"],
+        "enemies": ["Gatekeeper", "Sentinel", "Watch", "Guard"]
+    },
+    "Junction": {
+        "players": ["Meet", "Cross", "Join", "Unite"],
+        "enemies": ["Crossroads", "Intersection", "Node", "Hub"]
+    },
+    "Crossing": {
+        "players": ["Path", "Way", "Route", "Trail"],
+        "enemies": ["Bandit", "Raider", "Thief", "Outlaw"]
+    },
+    "Midway": {
+        "players": ["Center", "Middle", "Half", "Balance"],
+        "enemies": ["Neutral", "Void", "Empty", "Lost"]
+    }
+}
+
 
 class City:
     def __init__(self, id: int, name: str, x: float, y: float):
@@ -66,6 +142,7 @@ class Character:
         attack: int = 20,
         initiative: int = 10,
         image_index: int = 0,
+        name: str = "Unknown",
     ):
         self.x = x
         self.y = y
@@ -79,6 +156,7 @@ class Character:
         self.facing_right = True
         self.current_city_id = current_city_id  # 都市IDに変更
         self.image_index = image_index  # 画像の段数（0=1段目、1=2段目、2=3段目）
+        self.name = name  # キャラクター名
         # 戦闘ステータス
         self.life = life  # 残兵力（0になると消滅）
         self.max_life = life  # 最大兵力
@@ -88,6 +166,7 @@ class Character:
     def get_hover_info(self) -> List[str]:
         """ホバー時に表示する情報を取得（基底クラスの実装）"""
         info_lines = []
+        info_lines.append(f"Name: {self.name}")
         current_city = self.current_city_id if self.current_city_id else "None"
         info_lines.append(f"Location: {current_city}")
         info_lines.append(f"Life: {self.life}/{self.max_life}")
@@ -117,6 +196,7 @@ class Character:
             "attack": self.attack,
             "initiative": self.initiative,
             "image_index": self.image_index,
+            "name": self.name,
         }
 
     def update_from_dict(self, data: Dict[str, Any]):
@@ -137,6 +217,7 @@ class Character:
         self.attack = data.get("attack", 20)
         self.initiative = data.get("initiative", 10)
         self.image_index = data.get("image_index", 0)
+        self.name = data.get("name", "Unknown")
 
 
 class Player(Character):
@@ -146,6 +227,7 @@ class Player(Character):
         y: float,
         current_city_id: Optional[int] = None,
         initiative: int = 15,
+        name: str = "Player",
     ):
         super().__init__(
             x,
@@ -156,12 +238,13 @@ class Player(Character):
             attack=25,
             initiative=initiative,
             image_index=0,
+            name=name,
         )  # 1段目を使用、イニシアチブを引数で受け取る
 
     def get_hover_info(self) -> List[str]:
         """プレイヤー用のホバー情報を取得"""
-        info_lines = ["Player"]
-        info_lines.extend(super().get_hover_info())
+        info_lines = [f"Player: {self.name}"]
+        info_lines.extend(super().get_hover_info()[1:])  # 名前以外の情報を追加
         return info_lines
 
     def to_dict(self) -> Dict[str, Any]:
@@ -172,7 +255,11 @@ class Player(Character):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Player":
         initiative = data.get("initiative", 15)  # デフォルトは15
-        player = cls(data["x"], data["y"], data.get("current_city_id"), initiative)
+        name = data.get("name", "Player")  # デフォルトは"Player"
+        player = cls(
+            data["x"], data["y"], data.get("current_city_id"),
+            initiative, name
+        )
         player.update_from_dict(data)
         return player
 
@@ -185,6 +272,7 @@ class Enemy(Character):
         current_city_id: Optional[int] = None,
         ai_type: str = "random",
         image_index: int = 1,
+        name: str = "Enemy",
     ):
         # AIタイプに応じてイニシアチブを設定
         initiative_by_type = {
@@ -204,6 +292,7 @@ class Enemy(Character):
             attack=20,
             initiative=initiative,
             image_index=image_index,
+            name=name,
         )  # 2段目以降を使用
         self.ai_type = ai_type
         self.patrol_city_ids: List[int] = []  # 都市IDのリストに変更
@@ -212,8 +301,8 @@ class Enemy(Character):
 
     def get_hover_info(self) -> List[str]:
         """敵用のホバー情報を取得"""
-        info_lines = [f"Enemy ({self.ai_type})"]
-        info_lines.extend(super().get_hover_info())
+        info_lines = [f"Enemy: {self.name} ({self.ai_type})"]
+        info_lines.extend(super().get_hover_info()[1:])  # 名前以外の情報を追加
 
         # AI特性の説明を追加
         if self.ai_type == "aggressive":
@@ -243,18 +332,78 @@ class Enemy(Character):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Enemy":
         image_index = data.get("image_index", 1)  # デフォルトで2段目を使用
+        name = data.get("name", "Enemy")  # デフォルトは"Enemy"
         enemy = cls(
             data["x"],
             data["y"],
             data.get("current_city_id"),
             data.get("ai_type", "random"),
             image_index,
+            name,
         )
         enemy.update_from_dict(data)
         enemy.patrol_city_ids = data.get("patrol_city_ids", [])
         enemy.patrol_index = data.get("patrol_index", 0)
         enemy.last_player_position = data.get("last_player_position")
         return enemy
+
+
+def get_character_name_for_city(
+    city_name: str, character_type: str, used_names: set = None
+) -> str:
+    """指定された都市とキャラクタータイプに基づいて名前を選択する
+
+    Args:
+        city_name: 都市名
+        character_type: "players" または "enemies"
+        used_names: 既に使用された名前のセット（重複回避）
+
+    Returns:
+        選択された名前
+    """
+    if used_names is None:
+        used_names = set()
+
+    # 都市名に対応する名前リストを取得
+    if (city_name in CITY_CHARACTER_NAMES
+            and character_type in CITY_CHARACTER_NAMES[city_name]):
+        available_names = CITY_CHARACTER_NAMES[city_name][character_type]
+        # 未使用の名前から選択
+        unused_names = [
+            name for name in available_names if name not in used_names
+        ]
+        if unused_names:
+            return random.choice(unused_names)
+        else:
+            # 全て使用済みの場合は番号付きで返す
+            base_name = random.choice(available_names)
+            counter = 2
+            while f"{base_name}{counter}" in used_names:
+                counter += 1
+            return f"{base_name}{counter}"
+
+    # フォールバック名
+    fallback_names = {
+        "players": ["Hero", "Warrior", "Knight", "Guardian"],
+        "enemies": ["Foe", "Bandit", "Raider", "Villain"]
+    }
+
+    if character_type in fallback_names:
+        available_names = fallback_names[character_type]
+        unused_names = [
+            name for name in available_names if name not in used_names
+        ]
+        if unused_names:
+            return random.choice(unused_names)
+        else:
+            # フォールバック名も全て使用済みの場合
+            base_name = random.choice(available_names)
+            counter = 2
+            while f"{base_name}{counter}" in used_names:
+                counter += 1
+            return f"{base_name}{counter}"
+
+    return "Unknown"
 
 
 class GameState:
@@ -301,14 +450,38 @@ class GameState:
         ]
 
         # プレイヤーを作成（Central と West に配置）
+        used_names = set()
+
+        central_player_name = get_character_name_for_city(
+            "Central", "players", used_names
+        )
+        used_names.add(central_player_name)
+        west_player_name = get_character_name_for_city(
+            "West", "players", used_names
+        )
+        used_names.add(west_player_name)
+
         self.players = [
-            Player(self.cities[1].x, self.cities[1].y, 1),  # Central (0,0)
-            Player(self.cities[2].x, self.cities[2].y, 2, initiative=10),  # West (-1,2)
+            # Central (0,0)
+            Player(
+                self.cities[1].x, self.cities[1].y, 1, name=central_player_name
+            ),
+            # West (-1,2)
+            Player(
+                self.cities[2].x, self.cities[2].y, 2,
+                initiative=10, name=west_player_name
+            ),
         ]
 
         # 敵を作成（East に1体配置）
+        east_enemy_name = get_character_name_for_city(
+            "East", "enemies", used_names
+        )
+        used_names.add(east_enemy_name)
+
         enemy1 = Enemy(
-            self.cities[3].x, self.cities[3].y, 3, "aggressive", 1
+            self.cities[3].x, self.cities[3].y, 3,
+            "aggressive", 1, name=east_enemy_name
         )  # East (1,2)
 
         self.enemies = [enemy1]
@@ -623,6 +796,22 @@ class GameState:
         # 既存の敵の数に基づいて画像を決定（1〜3段目をローテーション）
         image_index = (len(self.enemies) % 3) + 1  # 1, 2, 3をローテーション
 
+        # 新都市の名前を取得
+        new_city = self.get_city_by_id(city_id)
+        city_name = new_city.name if new_city else "Unknown"
+
+        # 既に使用されている名前を収集
+        used_names = set()
+        for enemy in self.enemies:
+            used_names.add(enemy.name)
+        for player in self.players:
+            used_names.add(player.name)
+
+        # 都市に基づいた敵の名前を選択
+        enemy_name = get_character_name_for_city(
+            city_name, "enemies", used_names
+        )
+
         # 敵キャラクターを生成
         new_enemy = Enemy(
             x,
@@ -630,6 +819,7 @@ class GameState:
             current_city_id=city_id,
             ai_type=selected_ai_type,
             image_index=image_index,
+            name=enemy_name,
         )
 
         # パトロールタイプの場合、近隣都市をパトロール経路に設定
