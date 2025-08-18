@@ -335,7 +335,7 @@ class GameScene(Scene):
         
         # 敵のスポーン
         self.enemy_spawn_timer += 1
-        spawn_rate = max(30, 120 - self.game_timer // 3600)  # 時間経過で敵出現頻度増加
+        spawn_rate = max(30, 30 - self.game_timer // 3600)  # 時間経過で敵出現頻度増加
         if self.enemy_spawn_timer >= spawn_rate:
             self.spawn_enemy()
             self.enemy_spawn_timer = 0
@@ -350,10 +350,10 @@ class GameScene(Scene):
             enemy.update(self.player.pos)
             if not enemy.alive:
                 # アイテムドロップ
-                if random.random() < 0.7:  # 70%の確率で経験値
-                    self.items.append(Item(Vec2(enemy.pos.x, enemy.pos.y), 0))
-                elif random.random() < 0.1:  # 10%の確率で回復
+                if random.random() < 0.1:  # 10%の確率で回復
                     self.items.append(Item(Vec2(enemy.pos.x, enemy.pos.y), 1))
+                else:
+                    self.items.append(Item(Vec2(enemy.pos.x, enemy.pos.y), 0))
                 self.enemies.remove(enemy)
         
         # 弾丸更新
