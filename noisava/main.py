@@ -512,22 +512,197 @@ class GameScene(Scene):
         pyxel.text(5, 50, f"Companions: {len(self.player.companions)}", 7)
 
 
+class CompanionEditor:
+    def __init__(self):
+        self.companion_slots = [None] * 8  # 8個のスロット
+        self.available_companions = self.get_all_companions()
+        self.dragging = None
+        self.drag_offset = Vec2(0, 0)
+        self.slot_width = 16
+        self.slot_height = 16
+        self.slots_per_row = 4
+        
+    def get_all_companions(self):
+        # 開発中はすべての仲間を無制限に使用可能
+        companions = []
+        for companion_type in CompanionType:
+            companions.append(Companion(companion_type))
+        return companions
+    
+    def get_slot_rect(self, slot_index):
+        """スロットの座標を取得"""
+        row = slot_index // self.slots_per_row
+        col = slot_index % self.slots_per_row
+        x = 20 + col * (self.slot_width + 2)
+        y = 30 + row * (self.slot_height + 2)
+        return (x, y, self.slot_width, self.slot_height)
+    
+    def get_available_rect(self, comp_index):
+        """利用可能な仲間リストの座標を取得"""
+        row = comp_index // 3
+        col = comp_index % 3
+        x = 20 + col * (self.slot_width + 2)
+        y = 70 + row * (self.slot_height + 2)
+        return (x, y, self.slot_width, self.slot_height)
+    
+    def point_in_rect(self, point, rect):
+        return (rect[0] <= point.x <= rect[0] + rect[2] and
+                rect[1] <= point.y <= rect[1] + rect[3])
+    
+    def update(self, player):
+        mouse_x, mouse_y = pyxel.mouse_x, pyxel.mouse_y
+        mouse_pos = Vec2(mouse_x, mouse_y)
+        
+        if pyxel.btnp(pyxel.MOUSE_BUTTON_LEFT):
+            # ドラッグ開始
+            self.dragging = None
+            
+            # スロットからのドラッグ
+            for i, companion in enumerate(self.companion_slots):
+                if companion and self.point_in_rect(mouse_pos, self.get_slot_rect(i)):
+                    self.dragging = ('slot', i)
+                    rect = self.get_slot_rect(i)
+                    self.drag_offset = Vec2(mouse_x - rect[0], mouse_y - rect[1])
+                    break
+            
+            # 利用可能な仲間からのドラッグ
+            if not self.dragging:
+                for i, companion in enumerate(self.available_companions):
+                    if self.point_in_rect(mouse_pos, self.get_available_rect(i)):
+                        self.dragging = ('available', i)
+                        rect = self.get_available_rect(i)
+                        self.drag_offset = Vec2(mouse_x - rect[0], mouse_y - rect[1])
+                        break
+        
+        elif pyxel.btnr(pyxel.MOUSE_BUTTON_LEFT) and self.dragging:
+            # ドロップ処理
+            drop_slot = None
+            for i in range(len(self.companion_slots)):
+                if self.point_in_rect(mouse_pos, self.get_slot_rect(i)):
+                    drop_slot = i
+                    break
+            
+            if drop_slot is not None:
+                if self.dragging[0] == 'slot':
+                    # スロット間の移動
+                    source_slot = self.dragging[1]
+                    companion = self.companion_slots[source_slot]
+                    self.companion_slots[source_slot] = None
+                    self.companion_slots[drop_slot] = companion
+                elif self.dragging[0] == 'available':
+                    # 利用可能な仲間をスロットに配置
+                    companion_index = self.dragging[1]
+                    companion_type = self.available_companions[companion_index].type
+                    self.companion_slots[drop_slot] = Companion(companion_type)
+            
+            self.dragging = None
+        
+        # 右クリックでスロットから削除
+        if pyxel.btnp(pyxel.MOUSE_BUTTON_RIGHT):
+            for i in range(len(self.companion_slots)):
+                if self.point_in_rect(mouse_pos, self.get_slot_rect(i)):
+                    self.companion_slots[i] = None
+                    break
+        
+        # プレイヤーの仲間リストを更新
+        player.companions = [comp for comp in self.companion_slots if comp is not None]
+        if not player.companions:  # 空の場合は基本攻撃を追加
+            player.companions = [Companion(CompanionType.BASIC_SHOT)]
+    
+    def draw(self):
+        # 仲間スロット描画
+        pyxel.text(20, 20, "Companions:", 7)
+        for i in range(len(self.companion_slots)):
+            rect = self.get_slot_rect(i)
+            pyxel.rect(rect[0], rect[1], rect[2], rect[3], 7)
+            pyxel.rectb(rect[0], rect[1], rect[2], rect[3], 0)
+            
+            companion = self.companion_slots[i]
+            if companion and (not self.dragging or self.dragging != ('slot', i)):
+                # 仲間のアイコン（簡易表示）
+                color = self.get_companion_color(companion.type)
+                pyxel.rect(rect[0] + 1, rect[1] + 1, rect[2] - 2, rect[3] - 2, color)
+        
+        # 利用可能な仲間リスト描画
+        pyxel.text(20, 60, "Available:", 7)
+        for i, companion in enumerate(self.available_companions):
+            rect = self.get_available_rect(i)
+            color = self.get_companion_color(companion.type)
+            
+            if not self.dragging or self.dragging != ('available', i):
+                pyxel.rect(rect[0], rect[1], rect[2], rect[3], color)
+                pyxel.rectb(rect[0], rect[1], rect[2], rect[3], 0)
+        
+        # ドラッグ中のアイテム描画
+        if self.dragging:
+            mouse_x, mouse_y = pyxel.mouse_x, pyxel.mouse_y
+            draw_x = mouse_x - self.drag_offset.x
+            draw_y = mouse_y - self.drag_offset.y
+            
+            if self.dragging[0] == 'slot':
+                companion = self.companion_slots[self.dragging[1]]
+            else:
+                companion = self.available_companions[self.dragging[1]]
+            
+            if companion:
+                color = self.get_companion_color(companion.type)
+                pyxel.rect(draw_x, draw_y, self.slot_width, self.slot_height, color)
+                pyxel.rectb(draw_x, draw_y, self.slot_width, self.slot_height, 0)
+        
+        # 操作説明
+        pyxel.text(90, 30, "Drag & Drop to equip", 7)
+        pyxel.text(90, 40, "Right click to remove", 7)
+        pyxel.text(90, 50, "P: Resume game", 7)
+        
+        # 現在装備中の仲間名表示
+        y_offset = 100
+        pyxel.text(20, y_offset, "Equipped:", 7)
+        equipped = [comp for comp in self.companion_slots if comp is not None]
+        for i, companion in enumerate(equipped):
+            if y_offset + 10 + i * 8 < pyxel.height - 10:
+                pyxel.text(20, y_offset + 10 + i * 8, companion.name, 6)
+    
+    def get_companion_color(self, companion_type):
+        """仲間タイプに応じた色を返す"""
+        colors = {
+            CompanionType.BASIC_SHOT: 9,    # オレンジ
+            CompanionType.RAPID_SHOT: 8,    # 赤
+            CompanionType.SPREAD_SHOT: 11,  # 水色
+            CompanionType.MULTICAST: 10,    # 黄色
+            CompanionType.POWER_UP: 12,     # 紫
+            CompanionType.HOMING: 3         # 緑
+        }
+        return colors.get(companion_type, 7)
+
+
 class PauseScene(Scene):
     def __init__(self, game, game_scene):
         self.game = game
         self.game_scene = game_scene
+        self.companion_editor = CompanionEditor()
+        # 現在の仲間構成をエディターに読み込み
+        self.load_current_companions()
+    
+    def load_current_companions(self):
+        """現在プレイヤーが持っている仲間をエディターに読み込み"""
+        for i, companion in enumerate(self.game_scene.player.companions[:8]):
+            self.companion_editor.companion_slots[i] = companion
     
     def update(self):
         if pyxel.btnp(pyxel.KEY_P) or pyxel.btnp(pyxel.KEY_ESCAPE):
             self.game.change_scene(GameState.GAME)
+            return
+        
+        # 仲間エディターの更新
+        self.companion_editor.update(self.game_scene.player)
     
     def draw(self):
         # ゲーム画面を暗く描画
         self.game_scene.draw()
-        pyxel.rect(0, 0, pyxel.width, pyxel.height, 0)  # 半透明の代わりに黒
+        pyxel.rect(0, 0, pyxel.width, pyxel.height, 1)  # 半透明の代わりに青
         
-        pyxel.text(50, 60, "PAUSED", 7)
-        pyxel.text(30, 80, "Press P to Resume", 7)
+        # 仲間エディター描画
+        self.companion_editor.draw()
 
 
 class GameOverScene(Scene):
