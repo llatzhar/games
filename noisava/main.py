@@ -682,6 +682,8 @@ class PauseScene(Scene):
         self.companion_editor = CompanionEditor()
         # 現在の仲間構成をエディターに読み込み
         self.load_current_companions()
+        # マウスカーソルを表示
+        pyxel.mouse(True)
     
     def load_current_companions(self):
         """現在プレイヤーが持っている仲間をエディターに読み込み"""
@@ -690,6 +692,8 @@ class PauseScene(Scene):
     
     def update(self):
         if pyxel.btnp(pyxel.KEY_P) or pyxel.btnp(pyxel.KEY_ESCAPE):
+            # ゲーム再開時にマウスカーソルを非表示
+            pyxel.mouse(False)
             self.game.change_scene(GameState.GAME)
             return
         
@@ -744,26 +748,40 @@ class Game:
         self.state = new_state
         
         if new_state == GameState.TITLE:
+            # タイトル画面ではマウスカーソルを非表示
+            pyxel.mouse(False)
             self.current_scene = TitleScene(self)
             # ゲーム再開時にゲームシーンをリセット
             if GameState.GAME in self.scenes:
                 del self.scenes[GameState.GAME]
         elif new_state == GameState.GAME:
+            # ゲーム画面ではマウスカーソルを非表示
+            pyxel.mouse(False)
             if new_state not in self.scenes:
                 self.scenes[new_state] = GameScene(self)
             self.current_scene = self.scenes[new_state]
         elif new_state == GameState.LEVEL_UP:
+            # レベルアップ画面ではマウスカーソルを非表示
+            pyxel.mouse(False)
             self.current_scene = LevelUpScene(self, self.scenes[GameState.GAME])
         elif new_state == GameState.PAUSE:
+            # ポーズ画面ではマウスカーソルを表示（PauseSceneのコンストラクタで設定）
             self.current_scene = PauseScene(self, self.scenes[GameState.GAME])
         elif new_state == GameState.GAME_OVER:
+            # ゲームオーバー画面ではマウスカーソルを非表示
+            pyxel.mouse(False)
             self.current_scene = GameOverScene(self)
         elif new_state == GameState.CLEAR:
+            # クリア画面ではマウスカーソルを非表示
+            pyxel.mouse(False)
             self.current_scene = ClearScene(self)
     
     def run(self):
         pyxel.init(160, 120, title="NOISAVA")
         pyxel.load("noisava.pyxres")
+        
+        # 初期状態でマウスカーソルを非表示
+        pyxel.mouse(False)
         
         self.change_scene(GameState.TITLE)
         
