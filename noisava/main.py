@@ -5,6 +5,12 @@ from enum import Enum
 from abc import ABC, abstractmethod
 
 
+# ゲーム定数
+SPRITE_SIZE = 8  # キャラクタのスプライトサイズ (8x8)
+SCREEN_WIDTH = 160
+SCREEN_HEIGHT = 120
+
+
 class GameState(Enum):
     TITLE = 0
     GAME = 1
@@ -61,7 +67,7 @@ class Vec2:
 
 
 class GameObject:
-    def __init__(self, pos, size=8):
+    def __init__(self, pos, size=SPRITE_SIZE):
         self.pos = pos
         self.size = size
         self.alive = True
@@ -136,8 +142,8 @@ class Player(GameObject):
             dy += self.speed
         
         # 画面内に制限
-        self.pos.x = max(0, min(pyxel.width - self.size, self.pos.x + dx))
-        self.pos.y = max(0, min(pyxel.height - self.size, self.pos.y + dy))
+        self.pos.x = max(0, min(SCREEN_WIDTH - self.size, self.pos.x + dx))
+        self.pos.y = max(0, min(SCREEN_HEIGHT - self.size, self.pos.y + dy))
         
         # 攻撃クールダウン更新
         if self.attack_cooldown > 0:
@@ -164,7 +170,7 @@ class Player(GameObject):
         self.companions.append(companion)
     
     def draw(self):
-        pyxel.blt(self.pos.x, self.pos.y, 0, self.sprite_x, self.sprite_y, 8, 8)
+        pyxel.blt(self.pos.x, self.pos.y, 0, self.sprite_x, self.sprite_y, SPRITE_SIZE, SPRITE_SIZE)
 
 
 class Enemy(GameObject):
@@ -201,7 +207,7 @@ class Enemy(GameObject):
             self.alive = False
     
     def draw(self):
-        pyxel.blt(self.pos.x, self.pos.y, 0, self.sprite_x, self.sprite_y, 8, 8)
+        pyxel.blt(self.pos.x, self.pos.y, 0, self.sprite_x, self.sprite_y, SPRITE_SIZE, SPRITE_SIZE)
 
 
 class Bullet(GameObject):
@@ -228,13 +234,13 @@ class Bullet(GameObject):
         self.lifetime -= 1
         
         # 画面外または寿命切れで削除
-        if (self.pos.x < -self.size or self.pos.x > pyxel.width or
-            self.pos.y < -self.size or self.pos.y > pyxel.height or
+        if (self.pos.x < -self.size or self.pos.x > SCREEN_WIDTH or
+            self.pos.y < -self.size or self.pos.y > SCREEN_HEIGHT or
             self.lifetime <= 0):
             self.alive = False
     
     def draw(self):
-        pyxel.blt(self.pos.x, self.pos.y, 0, self.sprite_x, self.sprite_y, 8, 8)
+        pyxel.blt(self.pos.x, self.pos.y, 0, self.sprite_x, self.sprite_y, SPRITE_SIZE, SPRITE_SIZE)
 
 
 class Item(GameObject):
@@ -252,7 +258,7 @@ class Item(GameObject):
             self.value = 20
     
     def draw(self):
-        pyxel.blt(self.pos.x, self.pos.y, 0, self.sprite_x, self.sprite_y, 8, 8)
+        pyxel.blt(self.pos.x, self.pos.y, 0, self.sprite_x, self.sprite_y, SPRITE_SIZE, SPRITE_SIZE)
 
 
 class TitleScene(Scene):
@@ -315,7 +321,7 @@ class LevelUpScene(Scene):
 class GameScene(Scene):
     def __init__(self, game):
         self.game = game
-        self.player = Player(Vec2(pyxel.width // 2, pyxel.height // 2))
+        self.player = Player(Vec2(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
         self.enemies = []
         self.bullets = []
         self.items = []
@@ -375,13 +381,13 @@ class GameScene(Scene):
         # 画面外からランダムに敵をスポーン
         side = random.randint(0, 3)
         if side == 0:  # 上
-            pos = Vec2(random.randint(0, pyxel.width), -8)
+            pos = Vec2(random.randint(0, SCREEN_WIDTH), -SPRITE_SIZE)
         elif side == 1:  # 右
-            pos = Vec2(pyxel.width, random.randint(0, pyxel.height))
+            pos = Vec2(SCREEN_WIDTH, random.randint(0, SCREEN_HEIGHT))
         elif side == 2:  # 下
-            pos = Vec2(random.randint(0, pyxel.width), pyxel.height)
+            pos = Vec2(random.randint(0, SCREEN_WIDTH), SCREEN_HEIGHT)
         else:  # 左
-            pos = Vec2(-8, random.randint(0, pyxel.height))
+            pos = Vec2(-SPRITE_SIZE, random.randint(0, SCREEN_HEIGHT))
         
         enemy_type = 0 if random.random() < 0.8 else 1
         self.enemies.append(Enemy(pos, enemy_type))
@@ -393,7 +399,7 @@ class GameScene(Scene):
         
         closest_enemy = min(self.enemies, key=lambda e: self.player.pos.distance_to(e.pos))
         base_direction = (closest_enemy.pos - self.player.pos).normalize()
-        bullet_pos = Vec2(self.player.pos.x + 4, self.player.pos.y + 4)
+        bullet_pos = Vec2(self.player.pos.x + SPRITE_SIZE//2, self.player.pos.y + SPRITE_SIZE//2)
         
         # 仲間の効果を適用
         self.process_companions(bullet_pos, base_direction)
@@ -518,8 +524,8 @@ class CompanionEditor:
         self.available_companions = self.get_all_companions()
         self.dragging = None
         self.drag_offset = Vec2(0, 0)
-        self.slot_width = 16
-        self.slot_height = 16
+        self.slot_width = SPRITE_SIZE * 2  # スロットサイズをスプライトサイズの2倍に
+        self.slot_height = SPRITE_SIZE * 2
         self.slots_per_row = 4
         
     def get_all_companions(self):
@@ -659,7 +665,7 @@ class CompanionEditor:
         pyxel.text(20, y_offset, "Equipped:", 7)
         equipped = [comp for comp in self.companion_slots if comp is not None]
         for i, companion in enumerate(equipped):
-            if y_offset + 10 + i * 8 < pyxel.height - 10:
+            if y_offset + 10 + i * 8 < SCREEN_HEIGHT - 10:
                 pyxel.text(20, y_offset + 10 + i * 8, companion.name, 6)
     
     def get_companion_color(self, companion_type):
@@ -703,7 +709,7 @@ class PauseScene(Scene):
     def draw(self):
         # ゲーム画面を暗く描画
         self.game_scene.draw()
-        pyxel.rect(0, 0, pyxel.width, pyxel.height, 1)  # 半透明の代わりに青
+        pyxel.rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 1)  # 半透明の代わりに青
         
         # 仲間エディター描画
         self.companion_editor.draw()
@@ -777,7 +783,7 @@ class Game:
             self.current_scene = ClearScene(self)
     
     def run(self):
-        pyxel.init(160, 120, title="NOISAVA")
+        pyxel.init(SCREEN_WIDTH, SCREEN_HEIGHT, title="NOISAVA")
         pyxel.load("noisava.pyxres")
         
         # 初期状態でマウスカーソルを非表示
