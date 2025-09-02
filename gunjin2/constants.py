@@ -131,11 +131,12 @@ PLAYER2_SETUP_AREA = [(x, y) for x in range(BOARD_WIDTH) for y in range(0, 3)]
 
 # 司令部の位置
 # プレイヤー1の司令部（下側中央）
-PLAYER1_HEADQUARTERS = [(3, 5), (4, 5)]
+PLAYER1_HEADQUARTERS = [(3, 5)] # , (4, 5)]
 # プレイヤー2の司令部（上側中央）
-PLAYER2_HEADQUARTERS = [(3, 0), (4, 0)]
+PLAYER2_HEADQUARTERS = [(3, 0)] # , (4, 0)]
 
 # 侵入不可領域と突入口
+NEUTRAL_ZONE_HEIGHT = 1
 NEUTRAL_ZONE_Y = 3  # 中央線
 BRIDGE_POSITIONS = [(1, 3), (6, 3)]  # 突入口の位置
 

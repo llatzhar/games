@@ -180,7 +180,7 @@ class GameUI:
         
         # 盤面の背景
         board_width = BOARD_WIDTH * CELL_SIZE
-        board_height = BOARD_HEIGHT * CELL_SIZE
+        board_height = BOARD_HEIGHT * CELL_SIZE + NEUTRAL_ZONE_HEIGHT * CELL_SIZE
         board_rect = pygame.Rect(board_start_x, board_start_y, board_width, board_height)
         pygame.draw.rect(self.screen, COLOR_BROWN, board_rect)
         
@@ -190,7 +190,7 @@ class GameUI:
             end_pos = (board_start_x + x * CELL_SIZE, board_start_y + board_height)
             pygame.draw.line(self.screen, COLOR_BLACK, start_pos, end_pos)
             
-        for y in range(BOARD_HEIGHT + 1):
+        for y in range(BOARD_HEIGHT + 1 + 1): # 侵入不可領域分+1
             start_pos = (board_start_x, board_start_y + y * CELL_SIZE)
             end_pos = (board_start_x + board_width, board_start_y + y * CELL_SIZE)
             pygame.draw.line(self.screen, COLOR_BLACK, start_pos, end_pos)
@@ -209,15 +209,15 @@ class GameUI:
         # プレイヤー1司令部（赤）
         for hq_x, hq_y in PLAYER1_HEADQUARTERS:
             cell_x = board_x + hq_x * CELL_SIZE
-            cell_y = board_y + hq_y * CELL_SIZE
-            cell_rect = pygame.Rect(cell_x + 2, cell_y + 2, CELL_SIZE - 4, CELL_SIZE - 4)
+            cell_y = board_y + (hq_y + NEUTRAL_ZONE_HEIGHT) * CELL_SIZE
+            cell_rect = pygame.Rect(cell_x + 2, cell_y + 2, CELL_SIZE * 2 - 3, CELL_SIZE - 4)
             pygame.draw.rect(self.screen, (255, 200, 200), cell_rect)
             
         # プレイヤー2司令部（青）
         for hq_x, hq_y in PLAYER2_HEADQUARTERS:
             cell_x = board_x + hq_x * CELL_SIZE
             cell_y = board_y + hq_y * CELL_SIZE
-            cell_rect = pygame.Rect(cell_x + 2, cell_y + 2, CELL_SIZE - 4, CELL_SIZE - 4)
+            cell_rect = pygame.Rect(cell_x + 2, cell_y + 2, CELL_SIZE * 2 - 3, CELL_SIZE - 4)
             pygame.draw.rect(self.screen, (200, 200, 255), cell_rect)
             
     def draw_neutral_zone(self, board_x, board_y):
@@ -251,7 +251,10 @@ class GameUI:
             return
             
         cell_x = board_x + piece.x * CELL_SIZE
-        cell_y = board_y + piece.y * CELL_SIZE
+        if piece.y < 3:
+            cell_y = board_y + piece.y * CELL_SIZE
+        else:
+            cell_y = board_y + (piece.y + NEUTRAL_ZONE_HEIGHT) * CELL_SIZE 
         
         # 駒の背景円
         center_x = cell_x + CELL_SIZE // 2
