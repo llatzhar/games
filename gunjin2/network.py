@@ -9,6 +9,23 @@ import json
 import time
 from constants import *
 
+def get_local_ip():
+    """ローカルIPアドレスを取得"""
+    try:
+        # ダミーのUDP接続を作成してローカルIPを取得
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+        return local_ip
+    except Exception:
+        try:
+            # フォールバック：ホスト名からIPアドレスを取得
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            return local_ip
+        except Exception:
+            return "127.0.0.1"
+
 class NetworkManager:
     """ネットワーク通信の基本クラス"""
     
@@ -150,7 +167,13 @@ class GameServer(NetworkManager):
             self.accept_thread.daemon = True
             self.accept_thread.start()
             
+            # ローカルIPアドレスを取得して表示
+            local_ip = get_local_ip()
             print(f"サーバー開始: {self.host}:{self.port}")
+            print(f"ローカルIPアドレス: {local_ip}:{self.port}")
+            if local_ip != "127.0.0.1" and self.host == "localhost":
+                print(f"外部接続用: {local_ip}:{self.port}")
+            
             return True
             
         except Exception as e:
