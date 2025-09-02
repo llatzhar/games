@@ -92,7 +92,7 @@ WIN_REASON_ELIMINATION = "elimination"      # 相手全滅
 WIN_REASON_DISCONNECT = "disconnect"        # 相手切断
 
 # ネットワーク設定
-DEFAULT_HOST = "localhost"
+DEFAULT_HOST = "0.0.0.0"  # すべてのインターフェースでリッスン
 DEFAULT_PORT = 8888
 MAX_CONNECTIONS = 2
 

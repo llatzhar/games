@@ -171,7 +171,12 @@ class GameServer(NetworkManager):
             local_ip = get_local_ip()
             print(f"サーバー開始: {self.host}:{self.port}")
             print(f"ローカルIPアドレス: {local_ip}:{self.port}")
-            if local_ip != "127.0.0.1" and self.host == "localhost":
+            
+            if self.host == "0.0.0.0":
+                print("外部接続を受け付けます")
+                print(f"  - 同一マシン: localhost:{self.port} または 127.0.0.1:{self.port}")
+                print(f"  - LAN内他マシン: {local_ip}:{self.port}")
+            elif local_ip != "127.0.0.1":
                 print(f"外部接続用: {local_ip}:{self.port}")
             
             return True

@@ -5,7 +5,8 @@
 
 import pygame
 import sys
-from network import GameClient
+import argparse
+from network import GameClient, get_local_ip
 from ui import GameUI
 from game_board import GameBoard
 from constants import *
@@ -15,7 +16,11 @@ import time
 class GunjinClient:
     """軍人将棋クライアント"""
     
-    def __init__(self):
+    def __init__(self, server_host=None, server_port=DEFAULT_PORT):
+        # サーバーホストが指定されていない場合は自動検出
+        if server_host is None:
+            server_host = get_local_ip()
+            
         self.network = GameClient()
         self.ui = GameUI()
         self.board = GameBoard()  # 表示用ローカル盤面
@@ -24,6 +29,10 @@ class GunjinClient:
         self.my_player = None
         self.game_state = GAME_STATE_WAITING
         self.current_player = PLAYER1
+        
+        # サーバー接続先設定
+        self.server_host = server_host
+        self.server_port = server_port
         
         # ネットワークハンドラを登録
         self.network.register_handler(MSG_CONNECTION_ACCEPTED, self.handle_connection_accepted)
@@ -182,7 +191,7 @@ class GunjinClient:
             time.sleep(2.0)  # サーバー開始待ち
             
             # 自分自身に接続
-            if self.connect_to_server(DEFAULT_HOST, DEFAULT_PORT):
+            if self.connect_to_server(self.server_host, self.server_port):
                 pass  # 接続成功はhandle_connection_acceptedで処理
             else:
                 self.ui.show_message("サーバーの開始に失敗しました", "エラー")
@@ -199,9 +208,11 @@ class GunjinClient:
             
     def join_game(self):
         """ゲームに参加"""
-        # 簡易IP入力（実際の実装では入力ダイアログが必要）
-        host = DEFAULT_HOST
-        port = DEFAULT_PORT
+        # インスタンス変数のサーバー設定を使用
+        host = self.server_host
+        port = self.server_port
+        
+        print(f"サーバーに接続中: {host}:{port}")
         
         if self.connect_to_server(host, port):
             pass  # 接続成功は handle_connection_accepted で処理
@@ -418,7 +429,29 @@ class GunjinClient:
 
 def main():
     """クライアントメイン関数"""
-    client = GunjinClient()
+    # デフォルトの接続先を自動決定
+    default_server = get_local_ip()
+    
+    parser = argparse.ArgumentParser(description='軍人将棋クライアント')
+    parser.add_argument('--server', '-s', 
+                       default=default_server,
+                       help=f'接続先サーバーのIPアドレス (デフォルト: {default_server})')
+    parser.add_argument('--port', '-p', 
+                       type=int,
+                       default=DEFAULT_PORT,
+                       help=f'接続先サーバーのポート番号 (デフォルト: {DEFAULT_PORT})')
+    
+    args = parser.parse_args()
+    
+    print("=" * 60)
+    print("軍人将棋 LAN対戦版 - クライアント")
+    print("=" * 60)
+    print(f"接続先サーバー: {args.server}:{args.port}")
+    if args.server == default_server:
+        print("(自動検出された自マシンのIPアドレスに接続)")
+    print("=" * 60)
+    
+    client = GunjinClient(args.server, args.port)
     
     if not client.initialize():
         print("クライアント初期化に失敗しました")
