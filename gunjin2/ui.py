@@ -11,7 +11,7 @@ from pieces import get_piece_display_name, get_piece_display_color
 class GameUI:
     """ゲームのUI管理クラス"""
     
-    def __init__(self, width=800, height=600):
+    def __init__(self, width=1024, height=768):
         self.width = width
         self.height = height
         self.screen = None
