@@ -6,34 +6,133 @@
     <title>Gunjin Shogi</title>
     <style>
         body { font-family: sans-serif; text-align: center; }
-        #game-container { margin: 20px auto; width: 600px; height: 800px; border: 1px solid #ccc; background: #eee; }
+        #game-container { margin: 20px auto; width: 600px; height: 800px; border: 1px solid #ccc; background: #eee; display: none; }
+        #lobby { margin: 20px auto; width: 400px; border: 1px solid #ccc; padding: 20px; }
         #status { margin: 10px; font-weight: bold; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
     <h1>Gunjin Shogi WebUI</h1>
     <div id="status">Connecting...</div>
+
+    <div id="lobby">
+        <h2>Lobby</h2>
+        <div id="lobby-controls">
+            <button id="btn-create">Create Room</button>
+            <br><br>
+            <input type="text" id="input-room-id" placeholder="Room ID">
+            <button id="btn-join">Join Room</button>
+        </div>
+        <div id="room-info" class="hidden">
+            <p>Room ID: <span id="display-room-id"></span></p>
+            <p>Role: <span id="display-role"></span></p>
+            <p>Status: <span id="room-status">Waiting for opponent...</span></p>
+            <button id="btn-ready" disabled>Ready</button>
+        </div>
+    </div>
+
     <div id="game-container">
+        <h2>Game Board</h2>
+        <div id="game-info"></div>
         <!-- Board will be rendered here -->
     </div>
 
     <script>
         const statusDiv = document.getElementById('status');
-        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+        const lobbyDiv = document.getElementById('lobby');
+        const lobbyControls = document.getElementById('lobby-controls');
+        const roomInfo = document.getElementById('room-info');
+        const gameContainer = document.getElementById('game-container');
+        
+        const btnCreate = document.getElementById('btn-create');
+        const btnJoin = document.getElementById('btn-join');
+        const btnReady = document.getElementById('btn-ready');
+        const inputRoomId = document.getElementById('input-room-id');
+        
+        const displayRoomId = document.getElementById('display-room-id');
+        const displayRole = document.getElementById('display-role');
+        const roomStatus = document.getElementById('room-status');
+        const gameInfo = document.getElementById('game-info');
+
+        let playerId = null;
+        let currentRoomId = null;
+        let ws = new WebSocket(`ws://${window.location.host}/ws`);
 
         ws.onopen = () => {
             statusDiv.textContent = "Connected to Server";
-            ws.send(JSON.stringify({type: "HELLO", msg: "Client Ready"}));
         };
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             console.log("Received:", data);
+
+            switch (data.type) {
+                case "WELCOME":
+                    playerId = data.player_id;
+                    statusDiv.textContent = `Connected as ${playerId}`;
+                    break;
+                
+                case "ROOM_JOINED":
+                    currentRoomId = data.room_id;
+                    displayRoomId.textContent = currentRoomId;
+                    displayRole.textContent = data.role;
+                    
+                    lobbyControls.classList.add('hidden');
+                    roomInfo.classList.remove('hidden');
+                    
+                    if (data.role === "GUEST") {
+                        roomStatus.textContent = "Connected. Waiting for Ready...";
+                        btnReady.disabled = false;
+                    }
+                    break;
+
+                case "PLAYER_JOINED":
+                    roomStatus.textContent = "Opponent joined! Waiting for Ready...";
+                    btnReady.disabled = false;
+                    break;
+
+                case "PLAYER_READY":
+                    if (data.player_id === playerId) {
+                        roomStatus.textContent = "You are Ready. Waiting for opponent...";
+                        btnReady.disabled = true;
+                    } else {
+                        // Just a notification, logic handled by server mostly
+                        console.log("Opponent is ready");
+                    }
+                    break;
+
+                case "GAME_START":
+                    lobbyDiv.classList.add('hidden');
+                    gameContainer.style.display = 'block';
+                    gameInfo.textContent = `Game Started! You are ${data.side} vs ${data.opponent}`;
+                    break;
+
+                case "ERROR":
+                    alert(data.msg);
+                    break;
+            }
         };
 
         ws.onclose = () => {
             statusDiv.textContent = "Disconnected";
         };
+
+        btnCreate.onclick = () => {
+            ws.send(JSON.stringify({type: "CREATE_ROOM"}));
+        };
+
+        btnJoin.onclick = () => {
+            const roomId = inputRoomId.value.trim();
+            if (roomId) {
+                ws.send(JSON.stringify({type: "JOIN_ROOM", room_id: roomId}));
+            }
+        };
+
+        btnReady.onclick = () => {
+            ws.send(JSON.stringify({type: "READY"}));
+        };
+
     </script>
 </body>
 </html>
