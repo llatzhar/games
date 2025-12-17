@@ -38,6 +38,7 @@ Implement a Python client/server system for Gunjin Shogi per RULES.md. The serve
     - **Setup Phase UI**: Drag-and-drop interface for placing 23 pieces in the home territory.
     - **Game Phase UI**:
         - Render board (handling HQ visual merging).
+        - **Board Orientation**: Ensure the local player is always displayed at the bottom (Self-view). If the player is assigned the 'Top' side (BACK), the board rendering must be rotated 180 degrees so they play from the bottom up.
         - Display own pieces (visible) and opponent pieces (hidden '?').
         - Visual feedback for moves and combat results.
     - **Network**: WebSocket client handling reconnects and state sync.
