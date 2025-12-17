@@ -135,6 +135,25 @@
         const displayRole = document.getElementById('display-role');
         const roomStatus = document.getElementById('room-status');
 
+        const RANK_NAMES = {
+            "MARSHAL": "大将",
+            "GENERAL": "中将",
+            "LT_GEN": "少将",
+            "COLONEL": "大佐",
+            "LT_COL": "中佐",
+            "MAJOR": "少佐",
+            "CAPTAIN": "大尉",
+            "LIEUTENANT": "中尉",
+            "SEC_LT": "少尉",
+            "PLANE": "飛行",
+            "TANK": "戦車",
+            "CAVALRY": "騎兵",
+            "ENGINEER": "工兵",
+            "SPY": "間諜",
+            "MINE": "地雷",
+            "FLAG": "軍旗"
+        };
+
         let ws;
         let playerId;
         let mySide;
@@ -199,7 +218,8 @@
                     break;
                 case "COMBAT_RESULT":
                     // data: { my_piece: {rank: ...}, result: "WIN/LOSS/DRAW" }
-                    alert(`Combat Result: ${data.result} (Your piece: ${data.my_piece.rank})`);
+                    const myRank = RANK_NAMES[data.my_piece.rank] || data.my_piece.rank;
+                    alert(`Combat Result: ${data.result} (Your piece: ${myRank})`);
                     break;
                 case "GAME_OVER":
                     alert(`Game Over! Winner: ${data.winner}`);
@@ -428,9 +448,9 @@
             p.className = `piece ${pData.side}`;
             if (pData.rank === "UNKNOWN") {
                 p.classList.add('UNKNOWN');
-                p.textContent = "?";
+                p.textContent = "？";
             } else {
-                p.textContent = pData.rank.substring(0, 2); // Abbrev
+                p.textContent = RANK_NAMES[pData.rank] || pData.rank.substring(0, 2);
             }
             return p;
         }
