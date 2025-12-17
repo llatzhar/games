@@ -23,45 +23,113 @@ class MoveValidator:
         if target_piece and target_piece.side == piece.side:
             return False
 
-        # HQ Entry Restriction: Only Major (Rank.MAJOR=10) and above can enter Enemy HQ
+        # HQ Entry Restriction
         if self.board.is_hq(tr, tc):
             hq_owner = self.board.get_hq_owner(tr, tc)
             if hq_owner and hq_owner != piece.side:
-                # Entering enemy HQ
-                # Rank values: Major is 10. Officers are >= 7. 
-                # RULES.md says "Major and above". Assuming Major(10) to Marshal(15).
-                # Need to verify if Spy/Tank/Plane etc are allowed. Usually only high officers.
-                # Based on standard rules: Major(10) <= rank <= Marshal(15).
+                # Entering enemy HQ: Only Major (10) to Marshal (15) allowed
                 if not (Rank.MAJOR.value <= piece.rank.value <= Rank.MARSHAL.value):
                     return False
 
-        # Movement Logic per Piece Type
+        # Direction Logic
         dr = tr - fr
         dc = tc - fc
         abs_dr = abs(dr)
         abs_dc = abs(dc)
-
-        # 1. Standard Move (1 step orthogonal or diagonal)
-        # Most pieces move 1 step.
-        # Exceptions: Tank, Cavalry, Engineer, Plane, Mine(0 move)
         
-        if piece.rank == Rank.MINE or piece.rank == Rank.FLAG:
-            return False # Cannot move
+        forward_dir = -1 if piece.side == Side.FRONT else 1
+        is_forward = (dr == forward_dir) or (dr == forward_dir * 2)
+        is_backward = (dr == -forward_dir) or (dr == -forward_dir * 2) # Plane can fly back
+        
+        # River Crossing Check
+        # River is between Row 2 and Row 3.
+        crossing_river = (fr <= 2 and tr >= 3) or (fr >= 3 and tr <= 2)
+        is_bridge_col = (fc == 1 or fc == 6) and (tc == 1 or tc == 6) # Must stay on bridge col if crossing?
+        # Actually, if crossing river, you must be at Col 1 or 6 UNLESS you are Plane.
+        # Or if you are Tank/Cavalry jumping?
+        # RULES: "工兵は水を通過できないが、橋は通過できる" -> Must use bridge.
+        # "飛行機...水を無視して" -> Can cross anywhere.
+        
+        if crossing_river:
+            if piece.rank == Rank.PLANE:
+                pass # Allowed anywhere
+            else:
+                # Must be at bridge column (1 or 6) AND destination must be bridge column?
+                # Usually bridge is straight.
+                if not (fc == 1 or fc == 6):
+                    return False # Starting from non-bridge col
+                if not (tc == 1 or tc == 6):
+                    return False # Landing on non-bridge col (unless diagonal? No diagonal)
+                if fc != tc:
+                    return False # Must cross straight
 
-        if piece.rank == Rank.ENGINEER:
-            # Engineer: Can move any distance orthogonally (like Rook) but not jump (unless rail? RULES.md check needed)
-            # RULES.md usually says Engineers move like Rooks? Or just 1 step?
-            # Let's assume standard 1 step for now unless specified otherwise.
-            # Wait, RULES.md says "Engineer (free move)". Likely means Rook-like movement.
-            # Let's stick to 1-step for base implementation and refine later if needed.
-            pass 
+        # Specific Piece Movement
+        
+        if piece.rank in [Rank.MINE, Rank.FLAG]:
+            return False
 
-        # Standard 1-step check for now (covers Infantry, Officers, Spy)
-        if abs_dr <= 1 and abs_dc <= 1:
-            return True
+        # Standard (Infantry, Officers, Spy): 1 step orthogonal
+        if piece.rank in [Rank.INFANTRY, Rank.SPY] or (Rank.SEC_LT.value <= piece.rank.value <= Rank.MARSHAL.value):
+            return (abs_dr + abs_dc == 1)
+
+        # Tank / Cavalry
+        if piece.rank in [Rank.TANK, Rank.CAVALRY]:
+            # Forward: 1 or 2 steps
+            if dc == 0 and dr == forward_dir * 2:
+                # 2 steps forward
+                # Check obstruction
+                mid_r = fr + forward_dir
+                if self.board.get_piece(mid_r, fc) is not None:
+                    return False # Blocked
+                return True
             
-        # TODO: Implement Special Moves (Tank jump, Plane fly, Engineer range)
-        
+            # 1 step orthogonal (Forward/Back/Left/Right)
+            return (abs_dr + abs_dc == 1)
+
+        # Engineer (Rook-like)
+        if piece.rank == Rank.ENGINEER:
+            if dr != 0 and dc != 0:
+                return False # No diagonal
+            
+            # Check path clear
+            step_r = 0 if dr == 0 else (1 if dr > 0 else -1)
+            step_c = 0 if dc == 0 else (1 if dc > 0 else -1)
+            
+            curr_r, curr_c = fr + step_r, fc + step_c
+            while (curr_r, curr_c) != (tr, tc):
+                if self.board.get_piece(curr_r, curr_c) is not None:
+                    return False # Blocked
+                
+                # Check River crossing for Engineer
+                # If passing through river boundary (Row 2<->3)
+                prev_r = curr_r - step_r
+                if (prev_r <= 2 and curr_r >= 3) or (prev_r >= 3 and curr_r <= 2):
+                    if not (curr_c == 1 or curr_c == 6):
+                        return False # Cannot cross water
+                
+                curr_r += step_r
+                curr_c += step_c
+                
+            # Check River crossing for final step if applicable
+            # (Handled by loop if distance > 1, but if distance is 1, loop doesn't run)
+            if crossing_river and not (fc == 1 or fc == 6):
+                return False
+
+            return True
+
+        # Plane
+        if piece.rank == Rank.PLANE:
+            # Forward/Back: Any distance
+            # Left/Right: 1 step
+            
+            if dc == 0: # Vertical move (Forward or Back)
+                return True # Can jump, can cross water
+            
+            if dr == 0: # Horizontal move
+                return abs_dc == 1
+            
+            return False # No diagonal
+
         return False
 
 class CombatEngine:
@@ -73,53 +141,111 @@ class CombatEngine:
          0: Draw (both die)
         """
         
-        # 1. Mine Logic
-        if defender.rank == Rank.MINE:
-            if attacker.rank == Rank.ENGINEER:
-                return 1 # Engineer disarms Mine
-            if attacker.rank == Rank.PLANE:
-                return 1 # Plane flies over/destroys mine? (Check RULES.md) - Usually Plane survives.
-            return -1 # Attacker dies hitting mine (Mine usually survives or both die? RULES.md check needed. Standard: Attacker dies, Mine stays)
-            
-        # 2. Spy Logic
-        if attacker.rank == Rank.SPY:
-            if defender.rank == Rank.MARSHAL:
-                return 1 # Spy kills Marshal
-            # Spy loses to everything else except Flag/Spy(draw)
-            
-        # 3. Flag Logic
+        # Resolve Defender if Flag
+        effective_defender_rank = defender.rank
+        
         if defender.rank == Rank.FLAG:
-            # Flag strength depends on piece BEHIND it.
-            # "Behind" depends on Side.
-            # Front Side (Bottom): Behind is (row+1, col)
-            # Back Side (Top): Behind is (row-1, col)
-            
+            # Determine support
             behind_pos = None
             if defender.side == Side.FRONT:
                 behind_pos = (defender_pos[0] + 1, defender_pos[1])
             else:
                 behind_pos = (defender_pos[0] - 1, defender_pos[1])
-                
+            
             support_piece = board.get_piece(*behind_pos)
             
-            # If no support, Flag is weakest? Or has base strength?
-            # RULES.md: "Flag strength is same as piece behind it"
-            # If support is None, treat as weakest (0)?
-            
-            defender_strength = support_piece.rank.value if support_piece else 0
-            
-            # Compare Attacker vs Supported Flag
-            if attacker.rank.value > defender_strength:
-                return 1
-            elif attacker.rank.value < defender_strength:
-                return -1
+            if support_piece and support_piece.side == defender.side:
+                effective_defender_rank = support_piece.rank
             else:
+                # No support or enemy behind (weird) -> Weakest
+                # Flag loses to everything if unsupported?
+                # RULES: "軍旗の後ろが敵駒・空白・最後列の場合、全ての駒に負ける"
+                return 1 # Attacker wins
+        
+        # Special Matchups Table
+        
+        # Attacker: Plane
+        if attacker.rank == Rank.PLANE:
+            if effective_defender_rank in [Rank.MARSHAL, Rank.GENERAL, Rank.LT_GEN]:
+                return -1 # Plane loses to Generals
+            return 1 # Plane wins against everything else (including Mine, Tank, etc)
+            
+        # Defender: Plane
+        if effective_defender_rank == Rank.PLANE:
+            if attacker.rank in [Rank.MARSHAL, Rank.GENERAL, Rank.LT_GEN]:
+                return 1 # Generals kill Plane
+            return -1 # Plane kills everything else
+            
+        # Defender: Mine (or Flag mimicking Mine)
+        if effective_defender_rank == Rank.MINE:
+            if attacker.rank == Rank.ENGINEER:
+                return 1 # Engineer disarms Mine
+            if attacker.rank == Rank.PLANE:
+                return 1 # Plane destroys Mine (Handled above actually)
+            return 0 # Draw (Both die) - RULES: "地雷...その他の駒とは相討ち"
+            
+        # Attacker: Tank
+        if attacker.rank == Rank.TANK:
+            if effective_defender_rank in [Rank.MARSHAL, Rank.GENERAL, Rank.LT_GEN, Rank.PLANE, Rank.ENGINEER, Rank.MINE]:
+                return -1 # Tank loses to Generals, Plane, Engineer, Mine(Draw? No, Mine is handled above)
+                # Wait, Tank vs Mine?
+                # RULES Table: Tank vs Mine -> = (Draw)
+                # My Mine logic above returns 0 (Draw). Correct.
+                # Tank vs Engineer -> Tank loses?
+                # RULES Table: Tank vs Engineer -> X (Tank loses). Correct.
+            return 1 # Tank wins against others
+            
+        # Defender: Tank
+        if effective_defender_rank == Rank.TANK:
+            if attacker.rank in [Rank.MARSHAL, Rank.GENERAL, Rank.LT_GEN, Rank.PLANE, Rank.ENGINEER, Rank.MINE]:
+                # Attacker wins?
+                # Generals vs Tank -> Win
+                # Plane vs Tank -> Win
+                # Engineer vs Tank -> Win (RULES: Engineer vs Tank -> O)
+                # Mine vs Tank -> Draw (Handled)
+                return 1
+            return -1 # Tank wins
+            
+        # Attacker: Spy
+        if attacker.rank == Rank.SPY:
+            if effective_defender_rank == Rank.MARSHAL:
+                return 1
+            if effective_defender_rank == Rank.SPY:
                 return 0
-
-        # 4. Standard Rank Comparison
-        if attacker.rank.value > defender.rank.value:
+            return -1
+            
+        # Defender: Spy
+        if effective_defender_rank == Rank.SPY:
+            if attacker.rank == Rank.MARSHAL:
+                return -1 # Marshal dies to Spy? No, Spy vs Marshal -> Spy wins. Marshal vs Spy -> Marshal loses.
+                # Wait, RULES Table:
+                # Attacker(Marshal) vs Defender(Spy) -> O (Marshal Wins)
+                # Attacker(Spy) vs Defender(Marshal) -> O (Spy Wins)
+                # So Spy only wins if ATTACKING?
+                # RULES text: "スパイ...大将にのみ勝利"
+                # Table:
+                # Spy (row) vs Marshal (col) -> O
+                # Marshal (row) vs Spy (col) -> O
+                # Wait, Marshal vs Spy is O (Win). So Marshal kills Spy.
+                # Spy vs Marshal is O (Win). So Spy kills Marshal.
+                # So whoever attacks wins?
+                # Let's check standard Gunjin Shogi. Usually Spy kills Marshal always.
+                # But Table says: Marshal vs Spy -> O.
+                # This means Marshal attacks Spy -> Marshal wins.
+                # Spy attacks Marshal -> Spy wins.
+                # Interesting.
+                pass # Fall through to rank comparison? No, Spy is rank 1. Marshal is 15.
+                # If Marshal attacks Spy: 15 > 1 -> Win. Correct.
+                # If Spy attacks Marshal: Special case needed.
+        
+        if attacker.rank == Rank.SPY and effective_defender_rank == Rank.MARSHAL:
             return 1
-        elif attacker.rank.value < defender.rank.value:
+            
+        # Standard Rank Comparison
+        if attacker.rank.value > effective_defender_rank.value:
+            return 1
+        elif attacker.rank.value < effective_defender_rank.value:
             return -1
         else:
             return 0
+

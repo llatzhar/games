@@ -6,10 +6,73 @@
     <title>Gunjin Shogi</title>
     <style>
         body { font-family: sans-serif; text-align: center; }
-        #game-container { margin: 20px auto; width: 600px; height: 800px; border: 1px solid #ccc; background: #eee; display: none; }
+        #game-container { margin: 20px auto; width: 800px; display: none; }
         #lobby { margin: 20px auto; width: 400px; border: 1px solid #ccc; padding: 20px; }
         #status { margin: 10px; font-weight: bold; }
         .hidden { display: none; }
+        
+        /* Board Styles */
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            gap: 2px;
+            background-color: #888;
+            padding: 10px;
+            margin: 0 auto;
+            width: fit-content;
+        }
+        
+        .cell {
+            width: 60px;
+            height: 60px;
+            background-color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+        }
+        
+        .cell.hq {
+            background-color: #f0f0aa;
+            grid-column: span 2; /* HQ spans 2 columns */
+            width: 122px; /* 60*2 + 2 gap */
+        }
+        
+        .cell.river-gap {
+            grid-column: 1 / -1;
+            height: 20px;
+            background-color: #aaf;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #fff;
+            cursor: default;
+            width: auto; /* Override .cell width */
+        }
+
+        .piece {
+            width: 90%;
+            height: 90%;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .piece.FRONT { background-color: #d33; }
+        .piece.BACK { background-color: #33d; }
+        .piece.UNKNOWN { background-color: #555; color: #aaa; }
+        
+        .selected { border: 3px solid gold; }
+        .last-move { background-color: #ffeb3b55; }
+
+        #controls { margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -35,7 +98,10 @@
     <div id="game-container">
         <h2>Game Board</h2>
         <div id="game-info"></div>
-        <!-- Board will be rendered here -->
+        <div id="board"></div>
+        <div id="controls">
+            <button id="btn-auto-setup" class="hidden">Auto Setup & Start</button>
+        </div>
     </div>
 
     <script>
@@ -44,95 +110,338 @@
         const lobbyControls = document.getElementById('lobby-controls');
         const roomInfo = document.getElementById('room-info');
         const gameContainer = document.getElementById('game-container');
+        const boardDiv = document.getElementById('board');
+        const gameInfoDiv = document.getElementById('game-info');
         
         const btnCreate = document.getElementById('btn-create');
         const btnJoin = document.getElementById('btn-join');
         const btnReady = document.getElementById('btn-ready');
+        const btnAutoSetup = document.getElementById('btn-auto-setup');
         const inputRoomId = document.getElementById('input-room-id');
-        
         const displayRoomId = document.getElementById('display-room-id');
         const displayRole = document.getElementById('display-role');
         const roomStatus = document.getElementById('room-status');
-        const gameInfo = document.getElementById('game-info');
 
-        let playerId = null;
-        let currentRoomId = null;
-        let ws = new WebSocket(`ws://${window.location.host}/ws`);
+        let ws;
+        let playerId;
+        let mySide;
+        let currentTurn;
+        let selectedPos = null;
+        let boardState = [];
 
-        ws.onopen = () => {
-            statusDiv.textContent = "Connected to Server";
-        };
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            console.log("Received:", data);
+            ws.onopen = () => {
+                statusDiv.textContent = "Connected";
+            };
 
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log("Received:", data);
+                handleMessage(data);
+            };
+
+            ws.onclose = () => {
+                statusDiv.textContent = "Disconnected";
+            };
+        }
+
+        function handleMessage(data) {
             switch (data.type) {
                 case "WELCOME":
                     playerId = data.player_id;
-                    statusDiv.textContent = `Connected as ${playerId}`;
                     break;
-                
                 case "ROOM_JOINED":
-                    currentRoomId = data.room_id;
-                    displayRoomId.textContent = currentRoomId;
-                    displayRole.textContent = data.role;
-                    
                     lobbyControls.classList.add('hidden');
                     roomInfo.classList.remove('hidden');
-                    
-                    if (data.role === "GUEST") {
-                        roomStatus.textContent = "Connected. Waiting for Ready...";
-                        btnReady.disabled = false;
-                    }
+                    displayRoomId.textContent = data.room_id;
+                    displayRole.textContent = data.role;
                     break;
-
                 case "PLAYER_JOINED":
-                    roomStatus.textContent = "Opponent joined! Waiting for Ready...";
-                    btnReady.disabled = false;
+                    roomStatus.textContent = `Players: ${data.count}/2`;
+                    if (data.count === 2) btnReady.disabled = false;
                     break;
-
                 case "PLAYER_READY":
-                    if (data.player_id === playerId) {
-                        roomStatus.textContent = "You are Ready. Waiting for opponent...";
-                        btnReady.disabled = true;
-                    } else {
-                        // Just a notification, logic handled by server mostly
-                        console.log("Opponent is ready");
-                    }
+                    roomStatus.textContent = `Player ${data.player_id} is Ready`;
                     break;
-
                 case "GAME_START":
                     lobbyDiv.classList.add('hidden');
                     gameContainer.style.display = 'block';
-                    gameInfo.textContent = `Game Started! You are ${data.side} vs ${data.opponent}`;
+                    mySide = data.side;
+                    gameInfoDiv.textContent = `You are ${mySide}. Setup Phase.`;
+                    btnAutoSetup.classList.remove('hidden');
+                    renderEmptyBoard();
                     break;
-
+                case "PLAY_START":
+                    btnAutoSetup.classList.add('hidden');
+                    gameInfoDiv.textContent = `Game Started! You are ${mySide}.`;
+                    break;
+                case "BOARD_UPDATE":
+                    boardState = data.board;
+                    currentTurn = data.turn;
+                    gameInfoDiv.textContent = `Turn: ${currentTurn} (You are ${mySide})`;
+                    renderBoard(data.board);
+                    break;
+                case "COMBAT_RESULT":
+                    // data: { my_piece: {rank: ...}, result: "WIN/LOSS/DRAW" }
+                    alert(`Combat Result: ${data.result} (Your piece: ${data.my_piece.rank})`);
+                    break;
+                case "GAME_OVER":
+                    alert(`Game Over! Winner: ${data.winner}`);
+                    break;
                 case "ERROR":
-                    alert(data.msg);
+                    alert("Error: " + data.msg);
                     break;
             }
-        };
+        }
 
-        ws.onclose = () => {
-            statusDiv.textContent = "Disconnected";
-        };
+        // --- Controls ---
 
-        btnCreate.onclick = () => {
-            ws.send(JSON.stringify({type: "CREATE_ROOM"}));
-        };
-
-        btnJoin.onclick = () => {
-            const roomId = inputRoomId.value.trim();
-            if (roomId) {
-                ws.send(JSON.stringify({type: "JOIN_ROOM", room_id: roomId}));
-            }
-        };
-
+        btnCreate.onclick = () => ws.send(JSON.stringify({ type: "CREATE_ROOM" }));
+        btnJoin.onclick = () => ws.send(JSON.stringify({ type: "JOIN_ROOM", room_id: inputRoomId.value }));
         btnReady.onclick = () => {
-            ws.send(JSON.stringify({type: "READY"}));
+            ws.send(JSON.stringify({ type: "READY" }));
+            btnReady.disabled = true;
+            roomStatus.textContent = "Waiting for game start...";
         };
 
+        btnAutoSetup.onclick = () => {
+            console.log("Auto Setup clicked");
+            // Generate random valid placement
+            const pieces = [
+                "MARSHAL", "GENERAL", "LT_GEN", "COLONEL", "LT_COL", "MAJOR",
+                "CAPTAIN", "CAPTAIN", "LIEUTENANT", "LIEUTENANT", "SEC_LT", "SEC_LT",
+                "PLANE", "PLANE", "TANK", "TANK", "CAVALRY", "ENGINEER", "ENGINEER",
+                "SPY", "MINE", "MINE", "FLAG"
+            ];
+            
+            // Shuffle
+            for (let i = pieces.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pieces[i], pieces[j]] = [pieces[j], pieces[i]];
+            }
+            
+            const placement = [];
+            let pIdx = 0;
+            
+            // Slots: Rows 3,4,5. HQ at (5,3) merged.
+            // My side rows are relative to board indices?
+            // Server expects absolute indices (0-5).
+            // If I am FRONT: Rows 3, 4, 5.
+            // If I am BACK: Rows 0, 1, 2.
+            
+            const rows = mySide === "FRONT" ? [3, 4, 5] : [0, 1, 2];
+            
+            for (let r of rows) {
+                for (let c = 0; c < 8; c++) {
+                    // Check HQ
+                    if (mySide === "FRONT" && r === 5 && (c === 3 || c === 4)) {
+                        if (c === 3) {
+                            // HQ Slot
+                            if (pIdx < pieces.length) {
+                                placement.push({ rank: pieces[pIdx++], pos: [r, c] }); // Use (5,3) for HQ
+                            }
+                        }
+                        // c=4 is skipped (merged)
+                    } else if (mySide === "BACK" && r === 0 && (c === 3 || c === 4)) {
+                        if (c === 3) {
+                            if (pIdx < pieces.length) {
+                                placement.push({ rank: pieces[pIdx++], pos: [r, c] });
+                            }
+                        }
+                    } else {
+                        if (pIdx < pieces.length) {
+                            placement.push({ rank: pieces[pIdx++], pos: [r, c] });
+                        }
+                    }
+                }
+            }
+            
+            console.log("Sending SETUP message with placement:", placement);
+            ws.send(JSON.stringify({ type: "SETUP", placement: placement }));
+            btnAutoSetup.disabled = true;
+        };
+
+        // --- Board Rendering ---
+
+        function renderEmptyBoard() {
+            // Just render grid structure
+            console.log("Rendering empty board (initial)");
+            renderBoard(null);
+        }
+
+        function renderBoard(boardData) {
+            if (boardData) {
+                console.log("Rendering board with data:", boardData);
+            }
+            boardDiv.innerHTML = '';
+            
+            // We need to render rows.
+            // If mySide is BACK, we should rotate the view?
+            // Plan says: "If the player is assigned the 'Top' side (BACK), the board rendering must be rotated 180 degrees so they play from the bottom up."
+            
+            const isRotated = (mySide === "BACK");
+            
+            // Rows to iterate: 0 to 5.
+            // If rotated: 0 to 5 (but displayed reversed? No, iterate 0..5 but map to visual?)
+            // If rotated, visual top is Row 5 (Self), visual bottom is Row 0 (Enemy).
+            // Wait, "play from bottom up".
+            // Normal (FRONT): Bottom is Row 5 (Self). Top is Row 0 (Enemy).
+            // Rotated (BACK): Bottom is Row 0 (Self). Top is Row 5 (Enemy).
+            
+            // So if Rotated, we iterate rows 5 down to 0?
+            // No, CSS Grid fills top-left to bottom-right.
+            // Normal: Row 0 -> Row 5.
+            // Rotated: Row 5 -> Row 0.
+            
+            const rowIndices = isRotated ? [5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5];
+            
+            rowIndices.forEach((r, visualRowIndex) => {
+                // Check for River Gap
+                // River is between Row 2 and 3.
+                // In Normal: After Row 2 (visual index 2).
+                // In Rotated: After Row 3 (visual index 2).
+                // So always after visual row index 2.
+                
+                if (visualRowIndex === 3) {
+                    const river = document.createElement('div');
+                    river.className = 'cell river-gap';
+                    river.textContent = "RIVER / BRIDGE";
+                    boardDiv.appendChild(river);
+                }
+                
+                // Columns
+                // If rotated, columns should also be reversed? (H->A)
+                // Normal: 0->7. Rotated: 7->0.
+                const colIndices = isRotated ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+                
+                colIndices.forEach(c => {
+                    // Check HQ Merging
+                    // HQ is at (0,3)+(0,4) and (5,3)+(5,4).
+                    
+                    if ((r === 0 || r === 5) && (c === 3 || c === 4)) {
+                        // HQ Zone
+                        // If rotated (7->0), we hit 4 then 3.
+                        // If normal (0->7), we hit 3 then 4.
+                        
+                        // We want to render the cell ONLY when we hit the "start" of the span in DOM order.
+                        // Normal: 3 is start. 4 is skip.
+                        // Rotated: 4 is start? No, grid-column span goes right.
+                        // If we output a cell at 4 with span 2, it covers 4 and 5 (Visual).
+                        // Board Cols: 4 and 3.
+                        // Visual Cols: 4 and 5.
+                        
+                        // If isRotated:
+                        // We output cells for 7, 6, 5.
+                        // Next is 4. If we output HQ here, it takes Visual 4 and 5.
+                        // Visual 4 corresponds to Col 4. Visual 5 corresponds to Col 3.
+                        // So we should output at c=4 and skip c=3?
+                        
+                        if (isRotated) {
+                            if (c === 3) return; // Skip 3 (2nd in DOM order)
+                            // Render at c=4
+                            const cell = createCell(r, 4, boardData ? boardData[r][4] : null);
+                            cell.classList.add('hq');
+                            cell.textContent = (r === 0) ? "MY HQ" : "ENEMY HQ";
+                            // The piece at HQ is logically at (r,3) or (r,4)?
+                            // RULES: "HQ is D1-E1... 2 cells merged... Occupancy is 1 slot"
+                            // My board implementation might store it at (r,3) or (r,4) or both?
+                            // Let's check server logic.
+                            // Server place_piece uses (r,c).
+                            // Setup uses (5,3) for HQ.
+                            // So piece is at (r,3).
+                            // So we should check boardData[r][3].
+                            
+                            if (boardData && boardData[r][3]) {
+                                const pDiv = createPiece(boardData[r][3]);
+                                cell.appendChild(pDiv);
+                            }
+                            boardDiv.appendChild(cell);
+                        } else {
+                            // Normal
+                            if (c === 4) return; // Skip 4
+                            // Render at c=3
+                            const cell = createCell(r, 3, boardData ? boardData[r][3] : null);
+                            cell.classList.add('hq');
+                            cell.textContent = (r === 0) ? "ENEMY HQ" : "MY HQ";
+                            if (boardData && boardData[r][3]) {
+                                const pDiv = createPiece(boardData[r][3]);
+                                cell.appendChild(pDiv);
+                            }
+                            boardDiv.appendChild(cell);
+                        }
+                    } else {
+                        // Normal Cell
+                        const cell = createCell(r, c, boardData ? boardData[r][c] : null);
+                        if (boardData && boardData[r][c]) {
+                            cell.appendChild(createPiece(boardData[r][c]));
+                        }
+                        boardDiv.appendChild(cell);
+                    }
+                });
+            });
+        }
+        
+        function createCell(r, c, pieceData) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.r = r;
+            cell.dataset.c = c;
+            
+            cell.onclick = () => handleCellClick(r, c);
+            
+            if (selectedPos && selectedPos[0] === r && selectedPos[1] === c) {
+                cell.classList.add('selected');
+            }
+            
+            return cell;
+        }
+        
+        function createPiece(pData) {
+            const p = document.createElement('div');
+            p.className = `piece ${pData.side}`;
+            if (pData.rank === "UNKNOWN") {
+                p.classList.add('UNKNOWN');
+                p.textContent = "?";
+            } else {
+                p.textContent = pData.rank.substring(0, 2); // Abbrev
+            }
+            return p;
+        }
+        
+        function handleCellClick(r, c) {
+            if (!boardState) return;
+            
+            // If setup phase, maybe allow swap? (Not implemented yet)
+            if (btnAutoSetup.disabled === false) return; // Setup not done
+            
+            if (selectedPos) {
+                // Move attempt
+                const [fr, fc] = selectedPos;
+                if (fr === r && fc === c) {
+                    selectedPos = null; // Deselect
+                } else {
+                    // Send Move
+                    ws.send(JSON.stringify({
+                        type: "MOVE",
+                        from: [fr, fc],
+                        to: [r, c]
+                    }));
+                    selectedPos = null;
+                }
+            } else {
+                // Select attempt
+                const piece = boardState[r][c];
+                if (piece && piece.side === mySide) {
+                    selectedPos = [r, c];
+                }
+            }
+            renderBoard(boardState); // Re-render to show selection
+        }
+
+        connect();
     </script>
 </body>
 </html>

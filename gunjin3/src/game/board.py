@@ -2,16 +2,16 @@ from typing import Optional, List, Tuple
 from .piece import Piece, Side, Rank
 
 # Board dimensions
-ROWS = 8
-COLS = 6
+ROWS = 6
+COLS = 8
 HQ_POSITIONS = {
-    Side.FRONT: [(7, 2), (7, 3)], # Front HQ (merged)
-    Side.BACK: [(0, 2), (0, 3)]   # Back HQ (merged)
+    Side.FRONT: [(5, 3), (5, 4)], # Front HQ (merged) - Row 1 (Index 5), Cols D,E (3,4)
+    Side.BACK: [(0, 3), (0, 4)]   # Back HQ (merged) - Row 6 (Index 0), Cols D,E (3,4)
 }
 
 class Board:
     def __init__(self):
-        # 8x6 grid. None means empty.
+        # 6x8 grid. None means empty.
         # Coordinates: (row, col). (0,0) is Top-Left (Back side's deep left).
         self.grid: List[List[Optional[Piece]]] = [[None for _ in range(COLS)] for _ in range(ROWS)]
         
