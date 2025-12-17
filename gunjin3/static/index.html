@@ -25,7 +25,7 @@
         .cell {
             width: 60px;
             height: 60px;
-            background-color: #fff;
+            background-color: #d2b48c;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -41,17 +41,30 @@
             width: 122px; /* 60*2 + 2 gap */
         }
         
-        .cell.river-gap {
-            grid-column: 1 / -1;
-            height: 20px;
-            background-color: #aaf;
+        .cell.river-cell {
+            height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            color: #fff;
             cursor: default;
-            width: auto; /* Override .cell width */
+            font-size: 14px;
+        }
+        .cell.river {
+            background-color: #4488ff;
+            color: #fff;
+            border-top: 2px solid #8b4513;
+            border-bottom: 2px solid #8b4513;
+        }
+        .cell.bridge {
+            width: 58px;
+            background-color: #d2b48c;
+            color: #000;
+            border-left: 2px solid #8b4513;
+            border-right: 2px solid #8b4513;
+        }
+        .cell.bridge-col {
+            background-color: #e6d8ad;
         }
 
         .piece {
@@ -306,10 +319,20 @@
                 // So always after visual row index 2.
                 
                 if (visualRowIndex === 3) {
-                    const river = document.createElement('div');
-                    river.className = 'cell river-gap';
-                    river.textContent = "RIVER / BRIDGE";
-                    boardDiv.appendChild(river);
+                    // Render River Row
+                    const colIndicesRiver = isRotated ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+                    colIndicesRiver.forEach(c => {
+                        const riverCell = document.createElement('div');
+                        riverCell.className = 'cell river-cell';
+                        if (c === 1 || c === 6) {
+                            riverCell.classList.add('bridge');
+                            riverCell.textContent = "||";
+                        } else {
+                            riverCell.classList.add('river');
+                            riverCell.textContent = "~";
+                        }
+                        boardDiv.appendChild(riverCell);
+                    });
                 }
                 
                 // Columns
@@ -344,7 +367,6 @@
                             // Render at c=4
                             const cell = createCell(r, 4, boardData ? boardData[r][4] : null);
                             cell.classList.add('hq');
-                            cell.textContent = (r === 0) ? "MY HQ" : "ENEMY HQ";
                             // The piece at HQ is logically at (r,3) or (r,4)?
                             // RULES: "HQ is D1-E1... 2 cells merged... Occupancy is 1 slot"
                             // My board implementation might store it at (r,3) or (r,4) or both?
@@ -365,7 +387,6 @@
                             // Render at c=3
                             const cell = createCell(r, 3, boardData ? boardData[r][3] : null);
                             cell.classList.add('hq');
-                            cell.textContent = (r === 0) ? "ENEMY HQ" : "MY HQ";
                             if (boardData && boardData[r][3]) {
                                 const pDiv = createPiece(boardData[r][3]);
                                 cell.appendChild(pDiv);
@@ -375,6 +396,9 @@
                     } else {
                         // Normal Cell
                         const cell = createCell(r, c, boardData ? boardData[r][c] : null);
+                        if (c === 1 || c === 6) {
+                            cell.classList.add('bridge-col');
+                        }
                         if (boardData && boardData[r][c]) {
                             cell.appendChild(createPiece(boardData[r][c]));
                         }
