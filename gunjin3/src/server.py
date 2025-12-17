@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import uuid
+import random
 from typing import Dict, Set, Optional, List
 from aiohttp import web
 import aiohttp
@@ -117,7 +118,10 @@ class RoomManager:
         self.player_room_map: Dict[str, str] = {} # player_id -> room_id
 
     def create_room(self) -> str:
-        room_id = str(uuid.uuid4())[:8]
+        while True:
+            room_id = str(random.randint(1000, 9999))
+            if room_id not in self.rooms:
+                break
         self.rooms[room_id] = Room(room_id)
         return room_id
 
