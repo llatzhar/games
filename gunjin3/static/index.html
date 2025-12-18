@@ -86,6 +86,38 @@
         .last-move { background-color: #ffeb3b55; }
 
         #controls { margin-top: 20px; }
+
+        /* Setup Phase Styles */
+        #setup-container {
+            margin-top: 20px;
+            padding: 10px;
+            border-top: 2px solid #ccc;
+        }
+        #reserve {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+            min-height: 70px;
+            background-color: #eee;
+            padding: 10px;
+            border: 1px dashed #999;
+        }
+        .reserve-slot {
+            width: 60px;
+            height: 60px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .piece.draggable {
+            cursor: grab;
+        }
+        .piece.dragging {
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
@@ -112,8 +144,18 @@
         <h2>Game Board</h2>
         <div id="game-info"></div>
         <div id="board"></div>
+        
+        <div id="setup-container" class="hidden">
+            <h3>Setup Phase</h3>
+            <p>Drag pieces from reserve to your territory (Bottom 3 rows).</p>
+            <div id="reserve"></div>
+            <br>
+            <button id="btn-confirm-setup" disabled>Confirm Setup</button>
+            <button id="btn-auto-setup">Auto Setup (Random)</button>
+        </div>
+
         <div id="controls">
-            <button id="btn-auto-setup" class="hidden">Auto Setup & Start</button>
+            <!-- Game controls if any -->
         </div>
     </div>
 
@@ -130,6 +172,10 @@
         const btnJoin = document.getElementById('btn-join');
         const btnReady = document.getElementById('btn-ready');
         const btnAutoSetup = document.getElementById('btn-auto-setup');
+        const btnConfirmSetup = document.getElementById('btn-confirm-setup');
+        const setupContainer = document.getElementById('setup-container');
+        const reserveDiv = document.getElementById('reserve');
+        
         const inputRoomId = document.getElementById('input-room-id');
         const displayRoomId = document.getElementById('display-room-id');
         const displayRole = document.getElementById('display-role');
@@ -160,6 +206,12 @@
         let currentTurn;
         let selectedPos = null;
         let boardState = [];
+        
+        // Setup State
+        let isSetupPhase = false;
+        let reservePieces = []; // List of rank strings
+        let setupBoard = []; // 6x8 array of rank strings or null
+        let draggedPiece = null; // { source: 'reserve'|'board', index: int, r: int, c: int, rank: str }
 
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -203,11 +255,12 @@
                     gameContainer.style.display = 'block';
                     mySide = data.side;
                     gameInfoDiv.textContent = `You are ${mySide}. Setup Phase.`;
-                    btnAutoSetup.classList.remove('hidden');
-                    renderEmptyBoard();
+                    
+                    startSetupPhase();
                     break;
                 case "PLAY_START":
-                    btnAutoSetup.classList.add('hidden');
+                    isSetupPhase = false;
+                    setupContainer.classList.add('hidden');
                     gameInfoDiv.textContent = `Game Started! You are ${mySide}.`;
                     break;
                 case "BOARD_UPDATE":
@@ -229,6 +282,204 @@
                     break;
             }
         }
+
+        // --- Setup Logic ---
+
+        function startSetupPhase() {
+            isSetupPhase = true;
+            setupContainer.classList.remove('hidden');
+            
+            // Initialize Pieces
+            const initialPieces = [
+                "MARSHAL", "GENERAL", "LT_GEN", "COLONEL", "LT_COL", "MAJOR",
+                "CAPTAIN", "CAPTAIN", "LIEUTENANT", "LIEUTENANT", "SEC_LT", "SEC_LT",
+                "PLANE", "PLANE", "TANK", "TANK", "CAVALRY", "ENGINEER", "ENGINEER",
+                "SPY", "MINE", "MINE", "FLAG"
+            ];
+            reservePieces = [...initialPieces];
+            
+            // Initialize Setup Board (6x8)
+            setupBoard = Array(6).fill(null).map(() => Array(8).fill(null));
+            
+            renderSetupUI();
+        }
+
+        function renderSetupUI() {
+            renderSetupBoard();
+            renderReserve();
+            checkSetupComplete();
+        }
+
+        function renderReserve() {
+            reserveDiv.innerHTML = '';
+            reservePieces.forEach((rank, index) => {
+                const slot = document.createElement('div');
+                slot.className = 'reserve-slot';
+                
+                const pDiv = createPiece({ rank: rank, side: mySide });
+                pDiv.classList.add('draggable');
+                pDiv.draggable = true;
+                pDiv.ondragstart = (e) => handleDragStart(e, { source: 'reserve', index: index, rank: rank });
+                
+                slot.appendChild(pDiv);
+                reserveDiv.appendChild(slot);
+            });
+            
+            // Allow dropping back to reserve
+            reserveDiv.ondragover = (e) => e.preventDefault();
+            reserveDiv.ondrop = (e) => handleDrop(e, { target: 'reserve' });
+        }
+
+        function renderSetupBoard() {
+            boardDiv.innerHTML = '';
+            const isRotated = (mySide === "BACK");
+            const rowIndices = isRotated ? [5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5];
+            
+            // Define valid territory rows (absolute indices)
+            // FRONT: 3, 4, 5. BACK: 0, 1, 2.
+            const validRows = (mySide === "FRONT") ? [3, 4, 5] : [0, 1, 2];
+
+            rowIndices.forEach((r, visualRowIndex) => {
+                // River
+                if (visualRowIndex === 3) {
+                    const colIndicesRiver = isRotated ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+                    colIndicesRiver.forEach(c => {
+                        const riverCell = document.createElement('div');
+                        riverCell.className = 'cell river-cell';
+                        if (c === 1 || c === 6) {
+                            riverCell.classList.add('bridge');
+                            riverCell.textContent = "||";
+                        } else {
+                            riverCell.classList.add('river');
+                            riverCell.textContent = "~";
+                        }
+                        boardDiv.appendChild(riverCell);
+                    });
+                }
+                
+                const colIndices = isRotated ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+                colIndices.forEach(c => {
+                    // HQ Logic (Same as renderBoard but for setup)
+                    if ((r === 0 || r === 5) && (c === 3 || c === 4)) {
+                        if (isRotated) {
+                            if (c === 3) return;
+                            const cell = createSetupCell(r, 4, setupBoard[r][3]); // HQ stored at col 3
+                            cell.classList.add('hq');
+                            cell.textContent = (r === 0) ? "MY HQ" : "ENEMY HQ";
+                            if (setupBoard[r][3]) {
+                                const pDiv = createPiece({ rank: setupBoard[r][3], side: mySide });
+                                makeDraggable(pDiv, r, 3, setupBoard[r][3]);
+                                cell.appendChild(pDiv);
+                            }
+                            boardDiv.appendChild(cell);
+                        } else {
+                            if (c === 4) return;
+                            const cell = createSetupCell(r, 3, setupBoard[r][3]);
+                            cell.classList.add('hq');
+                            if (setupBoard[r][3]) {
+                                const pDiv = createPiece({ rank: setupBoard[r][3], side: mySide });
+                                makeDraggable(pDiv, r, 3, setupBoard[r][3]);
+                                cell.appendChild(pDiv);
+                            }
+                            boardDiv.appendChild(cell);
+                        }
+                    } else {
+                        const cell = createSetupCell(r, c, setupBoard[r][c]);
+                        if (c === 1 || c === 6) cell.classList.add('bridge-col');
+                        
+                        if (setupBoard[r][c]) {
+                            const pDiv = createPiece({ rank: setupBoard[r][c], side: mySide });
+                            makeDraggable(pDiv, r, c, setupBoard[r][c]);
+                            cell.appendChild(pDiv);
+                        }
+                        boardDiv.appendChild(cell);
+                    }
+                });
+            });
+        }
+
+        function createSetupCell(r, c, content) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.r = r;
+            cell.dataset.c = c;
+            
+            // Check if valid territory
+            const validRows = (mySide === "FRONT") ? [3, 4, 5] : [0, 1, 2];
+            if (validRows.includes(r)) {
+                cell.style.backgroundColor = "#eef"; // Highlight valid area
+                cell.ondragover = (e) => e.preventDefault();
+                cell.ondrop = (e) => handleDrop(e, { target: 'board', r: r, c: c });
+            } else {
+                cell.style.backgroundColor = "#ddd"; // Invalid area
+                cell.style.cursor = "not-allowed";
+            }
+            
+            return cell;
+        }
+
+        function makeDraggable(el, r, c, rank) {
+            el.classList.add('draggable');
+            el.draggable = true;
+            el.ondragstart = (e) => handleDragStart(e, { source: 'board', r: r, c: c, rank: rank });
+        }
+
+        function handleDragStart(e, data) {
+            draggedPiece = data;
+            e.dataTransfer.effectAllowed = 'move';
+            e.target.classList.add('dragging');
+        }
+
+        function handleDrop(e, targetData) {
+            e.preventDefault();
+            if (!draggedPiece) return;
+            
+            // Logic to move piece
+            // 1. Remove from source
+            if (draggedPiece.source === 'reserve') {
+                reservePieces.splice(draggedPiece.index, 1);
+            } else if (draggedPiece.source === 'board') {
+                setupBoard[draggedPiece.r][draggedPiece.c] = null;
+            }
+            
+            // 2. Add to target
+            if (targetData.target === 'reserve') {
+                reservePieces.push(draggedPiece.rank);
+            } else if (targetData.target === 'board') {
+                // If target occupied, swap? Or return to reserve?
+                // Let's swap if source was board, or return to reserve if source was reserve.
+                // Simplest: If occupied, move occupant to reserve.
+                const existing = setupBoard[targetData.r][targetData.c];
+                if (existing) {
+                    reservePieces.push(existing);
+                }
+                setupBoard[targetData.r][targetData.c] = draggedPiece.rank;
+            }
+            
+            draggedPiece = null;
+            renderSetupUI();
+        }
+
+        function checkSetupComplete() {
+            // Enable confirm if reserve is empty
+            btnConfirmSetup.disabled = (reservePieces.length > 0);
+        }
+
+        btnConfirmSetup.onclick = () => {
+            // Build placement list
+            const placement = [];
+            for (let r = 0; r < 6; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (setupBoard[r][c]) {
+                        placement.push({ rank: setupBoard[r][c], pos: [r, c] });
+                    }
+                }
+            }
+            console.log("Confirming Setup:", placement);
+            ws.send(JSON.stringify({ type: "SETUP", placement: placement }));
+            btnConfirmSetup.disabled = true;
+            gameInfoDiv.textContent = "Setup confirmed. Waiting for opponent...";
+        };
 
         // --- Controls ---
 
