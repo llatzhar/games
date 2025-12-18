@@ -710,7 +710,7 @@
             if (!boardState) return;
             
             // If setup phase, maybe allow swap? (Not implemented yet)
-            if (btnAutoSetup.disabled === false) return; // Setup not done
+            if (isSetupPhase) return; // Setup not done
             
             if (selectedPos) {
                 // Move attempt

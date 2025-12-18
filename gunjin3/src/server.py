@@ -320,8 +320,11 @@ async def websocket_handler(request):
                                     hq_owner = room.board.get_hq_owner(*to_pos)
                                     if hq_owner and hq_owner != side:
                                         # Occupied Enemy HQ
-                                        room.winner = side
-                                        await room.broadcast({"type": "GAME_OVER", "winner": side.name})
+                                        # Only Major(10) to Marshal(15) can trigger win
+                                        # AND attacker must have won the combat (result == 1)
+                                        if result == 1 and (Rank.MAJOR.value <= piece.rank.value <= Rank.MARSHAL.value):
+                                            room.winner = side
+                                            await room.broadcast({"type": "GAME_OVER", "winner": side.name})
                             else:
                                 # Simple Move
                                 room.board.move_piece(from_pos, to_pos)
@@ -330,8 +333,10 @@ async def websocket_handler(request):
                                 if room.board.is_hq(*to_pos):
                                     hq_owner = room.board.get_hq_owner(*to_pos)
                                     if hq_owner and hq_owner != side:
-                                        room.winner = side
-                                        await room.broadcast({"type": "GAME_OVER", "winner": side.name})
+                                        # Only Major(10) to Marshal(15) can trigger win
+                                        if Rank.MAJOR.value <= piece.rank.value <= Rank.MARSHAL.value:
+                                            room.winner = side
+                                            await room.broadcast({"type": "GAME_OVER", "winner": side.name})
 
                             # Switch Turn
                             room.turn = Side.BACK if room.turn == Side.FRONT else Side.FRONT

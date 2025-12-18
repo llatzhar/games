@@ -1,12 +1,35 @@
 from typing import Tuple, Optional
 from .piece import Piece, Rank, Side
-from .board import Board, ROWS, COLS
+from .board import Board, ROWS, COLS, HQ_POSITIONS
 
 class MoveValidator:
     def __init__(self, board: Board):
         self.board = board
 
     def is_valid_move(self, piece: Piece, from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
+        # HQ Targeting Leniency
+        # If target is HQ, allow move if valid to ANY cell of that HQ.
+        potential_targets = [to_pos]
+        if self.board.is_hq(*to_pos):
+            hq_owner = self.board.get_hq_owner(*to_pos)
+            if hq_owner:
+                potential_targets = HQ_POSITIONS[hq_owner]
+        
+        # HQ Departure Leniency
+        # If starting from HQ, treat as starting from ANY cell of that HQ.
+        potential_starts = [from_pos]
+        if self.board.is_hq(*from_pos):
+            hq_owner = self.board.get_hq_owner(*from_pos)
+            if hq_owner:
+                potential_starts = HQ_POSITIONS[hq_owner]
+
+        for start in potential_starts:
+            for target in potential_targets:
+                if self._check_single_move(piece, start, target):
+                    return True
+        return False
+
+    def _check_single_move(self, piece: Piece, from_pos: Tuple[int, int], to_pos: Tuple[int, int]) -> bool:
         fr, fc = from_pos
         tr, tc = to_pos
 
@@ -23,13 +46,13 @@ class MoveValidator:
         if target_piece and target_piece.side == piece.side:
             return False
 
-        # HQ Entry Restriction
-        if self.board.is_hq(tr, tc):
-            hq_owner = self.board.get_hq_owner(tr, tc)
-            if hq_owner and hq_owner != piece.side:
-                # Entering enemy HQ: Only Major (10) to Marshal (15) allowed
-                if not (Rank.MAJOR.value <= piece.rank.value <= Rank.MARSHAL.value):
-                    return False
+        # HQ Entry Restriction (REMOVED: All pieces can enter, but only Officers can win)
+        # if self.board.is_hq(tr, tc):
+        #     hq_owner = self.board.get_hq_owner(tr, tc)
+        #     if hq_owner and hq_owner != piece.side:
+        #         # Entering enemy HQ: Only Major (10) to Marshal (15) allowed
+        #         if not (Rank.MAJOR.value <= piece.rank.value <= Rank.MARSHAL.value):
+        #             return False
 
         # Direction Logic
         dr = tr - fr

@@ -18,11 +18,32 @@ class Board:
     def place_piece(self, piece: Piece, row: int, col: int):
         if not (0 <= row < ROWS and 0 <= col < COLS):
             raise ValueError(f"Position ({row}, {col}) is out of bounds")
-        self.grid[row][col] = piece
+        
+        # HQ Canonicalization
+        target_r, target_c = row, col
+        for side, positions in HQ_POSITIONS.items():
+            if (row, col) in positions:
+                target_r, target_c = positions[0] # Use first cell as canonical storage
+                # Ensure other slots are empty to avoid duplicates/ghosts
+                for r, c in positions:
+                    self.grid[r][c] = None
+                break
+                
+        self.grid[target_r][target_c] = piece
 
     def get_piece(self, row: int, col: int) -> Optional[Piece]:
         if not (0 <= row < ROWS and 0 <= col < COLS):
             return None
+            
+        # Check HQ
+        for side, positions in HQ_POSITIONS.items():
+            if (row, col) in positions:
+                # Return piece from ANY slot in this HQ (though place_piece enforces canonical)
+                for r, c in positions:
+                    if self.grid[r][c]:
+                        return self.grid[r][c]
+                return None
+                
         return self.grid[row][col]
 
     def move_piece(self, from_pos: Tuple[int, int], to_pos: Tuple[int, int]):
@@ -30,11 +51,20 @@ class Board:
         if not piece:
             raise ValueError("No piece at starting position")
         
-        # Simple move (no validation here, just state update)
-        self.grid[to_pos[0]][to_pos[1]] = piece
-        self.grid[from_pos[0]][from_pos[1]] = None
+        # Remove from source (handle HQ removal correctly)
+        self.remove_piece(*from_pos)
+        
+        # Place at destination
+        self.place_piece(piece, *to_pos)
 
     def remove_piece(self, row: int, col: int):
+        # Check HQ
+        for side, positions in HQ_POSITIONS.items():
+            if (row, col) in positions:
+                for r, c in positions:
+                    self.grid[r][c] = None
+                return
+
         self.grid[row][col] = None
 
     def is_hq(self, row: int, col: int) -> bool:
