@@ -363,9 +363,8 @@
                     if ((r === 0 || r === 5) && (c === 3 || c === 4)) {
                         if (isRotated) {
                             if (c === 3) return;
-                            const cell = createSetupCell(r, 4, setupBoard[r][3]); // HQ stored at col 3
+                            const cell = createSetupCell(r, 3, setupBoard[r][3]); // HQ stored at col 3
                             cell.classList.add('hq');
-                            cell.textContent = (r === 0) ? "MY HQ" : "ENEMY HQ";
                             if (setupBoard[r][3]) {
                                 const pDiv = createPiece({ rank: setupBoard[r][3], side: mySide });
                                 makeDraggable(pDiv, r, 3, setupBoard[r][3]);
