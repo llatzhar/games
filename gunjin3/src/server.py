@@ -3,6 +3,7 @@ import json
 import os
 import uuid
 import random
+import socket
 from typing import Dict, Set, Optional, List
 from aiohttp import web
 import aiohttp
@@ -373,4 +374,20 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
+
+    # Get Local IP
+    try:
+        # Try to get the IP that routes to the internet
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = "127.0.0.1"
+
+    print(f"\n{'='*40}")
+    print(f" Server Started")
+    print(f" Local Network URL: http://{local_ip}:{PORT}")
+    print(f"{'='*40}\n")
+
     web.run_app(app, port=PORT)
