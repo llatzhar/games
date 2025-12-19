@@ -178,7 +178,7 @@ async def websocket_handler(request):
                     if room_manager.join_room(room_id, player_id, ws):
                         await ws.send_json({"type": "ROOM_JOINED", "room_id": room_id, "role": "HOST"})
                     else:
-                        await ws.send_json({"type": "ERROR", "msg": "Failed to create/join room"})
+                        await ws.send_json({"type": "ERROR", "msg": "部屋の作成/入室に失敗しました"})
 
                 elif msg_type == "JOIN_ROOM":
                     room_id = data.get("room_id")
@@ -188,7 +188,7 @@ async def websocket_handler(request):
                         room = room_manager.get_room(player_id)
                         await room.broadcast({"type": "PLAYER_JOINED", "count": len(room.players)})
                     else:
-                        await ws.send_json({"type": "ERROR", "msg": "Room full or not found"})
+                        await ws.send_json({"type": "ERROR", "msg": "部屋が満員か見つかりません"})
 
                 elif msg_type == "READY":
                     room = room_manager.get_room(player_id)
@@ -247,7 +247,7 @@ async def websocket_handler(request):
                     if room and room.game_started and all(room.setup_complete.values()):
                         side = room.player_sides.get(player_id)
                         if room.turn != side:
-                            await ws.send_json({"type": "ERROR", "msg": "Not your turn"})
+                            await ws.send_json({"type": "ERROR", "msg": "あなたの手番ではありません"})
                             continue
                             
                         from_pos = tuple(data.get("from"))
@@ -255,7 +255,7 @@ async def websocket_handler(request):
                         
                         piece = room.board.get_piece(*from_pos)
                         if not piece or piece.side != side:
-                            await ws.send_json({"type": "ERROR", "msg": "Invalid piece"})
+                            await ws.send_json({"type": "ERROR", "msg": "無効な駒です"})
                             continue
                             
                         if room.validator.is_valid_move(piece, from_pos, to_pos):
@@ -342,7 +342,7 @@ async def websocket_handler(request):
                             room.turn = Side.BACK if room.turn == Side.FRONT else Side.FRONT
                             await room.send_board_update()
                         else:
-                            await ws.send_json({"type": "ERROR", "msg": "Invalid move"})
+                            await ws.send_json({"type": "ERROR", "msg": "無効な移動です"})
 
                 elif msg_type == "CHAT":
                     room = room_manager.get_room(player_id)

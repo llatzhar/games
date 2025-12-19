@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gunjin Shogi</title>
+    <title>軍人将棋</title>
     <style>
         body { font-family: sans-serif; text-align: center; }
         #game-container { margin: 20px auto; width: 800px; display: none; }
@@ -121,37 +121,37 @@
     </style>
 </head>
 <body>
-    <h1>Gunjin Shogi WebUI</h1>
-    <div id="status">Connecting...</div>
+    <h1>軍人将棋 WebUI</h1>
+    <div id="status">接続中...</div>
 
     <div id="lobby">
-        <h2>Lobby</h2>
+        <h2>ロビー</h2>
         <div id="lobby-controls">
-            <button id="btn-create">Create Room</button>
+            <button id="btn-create">部屋作成</button>
             <br><br>
-            <input type="text" id="input-room-id" placeholder="Room ID">
-            <button id="btn-join">Join Room</button>
+            <input type="text" id="input-room-id" placeholder="部屋ID">
+            <button id="btn-join">入室</button>
         </div>
         <div id="room-info" class="hidden">
-            <p>Room ID: <span id="display-room-id"></span></p>
-            <p>Role: <span id="display-role"></span></p>
-            <p>Status: <span id="room-status">Waiting for opponent...</span></p>
-            <button id="btn-ready" disabled>Ready</button>
+            <p>部屋ID: <span id="display-room-id"></span></p>
+            <p>役割: <span id="display-role"></span></p>
+            <p>状態: <span id="room-status">対戦相手待ち...</span></p>
+            <button id="btn-ready" disabled>準備完了</button>
         </div>
     </div>
 
     <div id="game-container">
-        <h2>Game Board</h2>
+        <h2>対戦盤面</h2>
         <div id="game-info"></div>
         <div id="board"></div>
         
         <div id="setup-container" class="hidden">
-            <h3>Setup Phase</h3>
-            <p>Drag pieces from reserve to your territory (Bottom 3 rows).</p>
+            <h3>配置フェーズ</h3>
+            <p>予備エリアから自陣（手前3行）に駒をドラッグして配置してください。</p>
             <div id="reserve"></div>
             <br>
-            <button id="btn-confirm-setup" disabled>Confirm Setup</button>
-            <button id="btn-auto-setup">Auto Setup (Random)</button>
+            <button id="btn-confirm-setup" disabled>配置完了</button>
+            <button id="btn-auto-setup">自動配置（ランダム）</button>
         </div>
 
         <div id="controls">
@@ -200,6 +200,10 @@
             "FLAG": "軍旗"
         };
 
+        const SIDE_NAMES = { "FRONT": "先手", "BACK": "後手" };
+        const RESULT_NAMES = { "WIN": "勝利", "LOSS": "敗北", "DRAW": "引き分け" };
+        const ROLE_NAMES = { "HOST": "ホスト", "GUEST": "ゲスト" };
+
         let ws;
         let playerId;
         let mySide;
@@ -218,7 +222,7 @@
             ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
             ws.onopen = () => {
-                statusDiv.textContent = "Connected";
+                statusDiv.textContent = "接続完了";
             };
 
             ws.onmessage = (event) => {
@@ -228,7 +232,7 @@
             };
 
             ws.onclose = () => {
-                statusDiv.textContent = "Disconnected";
+                statusDiv.textContent = "切断されました";
             };
         }
 
@@ -241,44 +245,44 @@
                     lobbyControls.classList.add('hidden');
                     roomInfo.classList.remove('hidden');
                     displayRoomId.textContent = data.room_id;
-                    displayRole.textContent = data.role;
+                    displayRole.textContent = ROLE_NAMES[data.role] || data.role;
                     break;
                 case "PLAYER_JOINED":
-                    roomStatus.textContent = `Players: ${data.count}/2`;
+                    roomStatus.textContent = `プレイヤー: ${data.count}/2人`;
                     if (data.count === 2) btnReady.disabled = false;
                     break;
                 case "PLAYER_READY":
-                    roomStatus.textContent = `Player ${data.player_id} is Ready`;
+                    roomStatus.textContent = `プレイヤー ${data.player_id} 準備完了`;
                     break;
                 case "GAME_START":
                     lobbyDiv.classList.add('hidden');
                     gameContainer.style.display = 'block';
                     mySide = data.side;
-                    gameInfoDiv.textContent = `You are ${mySide}. Setup Phase.`;
+                    gameInfoDiv.textContent = `あなたは ${SIDE_NAMES[mySide]} です。配置フェーズ`;
                     
                     startSetupPhase();
                     break;
                 case "PLAY_START":
                     isSetupPhase = false;
                     setupContainer.classList.add('hidden');
-                    gameInfoDiv.textContent = `Game Started! You are ${mySide}.`;
+                    gameInfoDiv.textContent = `ゲーム開始！ あなたは ${SIDE_NAMES[mySide]} です。`;
                     break;
                 case "BOARD_UPDATE":
                     boardState = data.board;
                     currentTurn = data.turn;
-                    gameInfoDiv.textContent = `Turn: ${currentTurn} (You are ${mySide})`;
+                    gameInfoDiv.textContent = `手番: ${SIDE_NAMES[currentTurn]} (あなたは ${SIDE_NAMES[mySide]})`;
                     renderBoard(data.board);
                     break;
                 case "COMBAT_RESULT":
                     // data: { my_piece: {rank: ...}, result: "WIN/LOSS/DRAW" }
                     const myRank = RANK_NAMES[data.my_piece.rank] || data.my_piece.rank;
-                    alert(`Combat Result: ${data.result} (Your piece: ${myRank})`);
+                    alert(`戦闘結果: ${RESULT_NAMES[data.result]} (あなたの駒: ${myRank})`);
                     break;
                 case "GAME_OVER":
-                    alert(`Game Over! Winner: ${data.winner}`);
+                    alert(`ゲーム終了！ 勝者: ${SIDE_NAMES[data.winner]}`);
                     break;
                 case "ERROR":
-                    alert("Error: " + data.msg);
+                    alert("エラー: " + data.msg);
                     break;
             }
         }
@@ -477,7 +481,7 @@
             console.log("Confirming Setup:", placement);
             ws.send(JSON.stringify({ type: "SETUP", placement: placement }));
             btnConfirmSetup.disabled = true;
-            gameInfoDiv.textContent = "Setup confirmed. Waiting for opponent...";
+            gameInfoDiv.textContent = "配置完了。相手を待っています...";
         };
 
         // --- Controls ---
@@ -487,7 +491,7 @@
         btnReady.onclick = () => {
             ws.send(JSON.stringify({ type: "READY" }));
             btnReady.disabled = true;
-            roomStatus.textContent = "Waiting for game start...";
+            roomStatus.textContent = "ゲーム開始待ち...";
         };
 
         btnAutoSetup.onclick = () => {
