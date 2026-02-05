@@ -1,0 +1,41 @@
+# Map Generation Configuration
+# =============================
+
+# Initial map setup
+initial_triangle_radius: 100.0  # Distance from center to initial cities
+
+# City placement parameters
+city_placement:
+  min_distance_from_existing: 80.0   # Minimum distance for new city placement
+  max_distance_from_existing: 200.0  # Maximum distance for new city placement
+  placement_angle_variance: 30.0     # Angular variance in degrees
+  placement_max_attempts: 100        # Retry limit for valid placement
+
+# Road generation parameters
+road_generation:
+  min_roads_per_city: 1      # Minimum roads for new city
+  max_roads_per_city: 3      # Maximum roads for new city
+  max_road_length: 150.0     # Maximum allowed road length
+  intersection_check: true   # Enable intersection avoidance
+
+# Viewer settings
+viewer:
+  width: 480           # Pyxel window width
+  height: 360          # Pyxel window height
+  initial_zoom: 1.0    # Starting zoom level
+  zoom_min: 0.25       # Minimum zoom (zoomed out)
+  zoom_max: 4.0        # Maximum zoom (zoomed in)
+  zoom_step: 0.1       # Zoom change per wheel tick
+
+# Colors (Pyxel palette indices 0-15)
+colors:
+  background: 0        # Black
+  player_city: 12      # Light blue
+  enemy_city: 8        # Red
+  road: 5              # Gray
+  ui_text: 7           # White
+  button_bg: 1         # Dark blue
+  button_hover: 2      # Purple
+
+# RNG seed (null for random, or integer for reproducible)
+rng_seed: null
